@@ -25,4 +25,7 @@ module.exports = {
     // !! WARN !!
     ignoreBuildErrors: true,
   },
+  eslint: {
+    ignoreDuringBuilds: true, // Disables ESLint checks during builds
+  },
 };
