@@ -407,7 +407,7 @@ export default function FileList() {
             onClick={() => setIsAddFileModalOpen(true)}
             className='w-full rounded-md bg-gray-800 px-2 py-1 text-sm text-white hover:bg-gray-700'
           >
-            Add File
+            Add Folder
           </button>
         </div>
 

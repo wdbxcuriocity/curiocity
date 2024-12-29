@@ -106,15 +106,18 @@ const FullTextEditor: React.FC<TextEditorProps> = ({
               border-bottom: 1px solid #333333 !important; 
             }
             .ql-toolbar .ql-stroke {
-              stroke: #fff;
+              stroke: white;
             }
             .ql-toolbar .ql-fill {
-              fill: #fff;
+              fill: white;
             }
             .ql-toolbar .ql-picker,
             .ql-toolbar .ql-picker-label,
-            .ql-toolbar .ql-picker-options {
-              color: #fff;
+            .ql-toolbar {
+              color: white;
+            }
+            .ql-picker-options {
+              color: black;
             }
             .ql-container {
               border: none !important;

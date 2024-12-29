@@ -141,7 +141,7 @@ export async function POST(request: Request) {
 
     await putObject(client, inputResourceMetaData, resourceMetaTable);
     await putObject(client, inputDocumentData, documentTable);
-
+    console.log(inputResourceMetaData);
     console.log('Successfully updated DynamoDB');
     return new Response(JSON.stringify(newDocument), { status: 200 });
   } catch (error) {
