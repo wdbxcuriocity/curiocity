@@ -1,67 +1,107 @@
-# WDB Full-Stack Next.js Template
+# Curiocity
 
-Please read the entirety of this README before starting development. There's a lot of useful information here!
+## Tech Stack
 
-## Getting Started
+- **Next.js**
+- **TypeScript**
+- **AWS**: DynamoDB + S3
 
-First, run the development server:
+## Key Features
+
+- Document Uploading
+- Resource Organization
+- Resource Uploading
+- Resource Parsing
+- Authentication
+
+## Running the Development Server
 
 ```bash
+git clone https://github.com/wdbxcuriocity/curiocity.git
+npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. There's also an additional page at [http://localhost:3000/test-page](http://localhost:3000/test-page) to demonstrate routing.
+## Pushing to Production
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Notes on `next.config.js`
 
-## First Steps
+- Auto-push to Vercel is currently disabled.
+- ESLint and TypeScript checks are ignored during builds:
+  ```javascript
+  eslint: {
+    ignoreDuringBuilds: true, // Ignore ESLint during builds
+  },
+  typescript: {
+    ignoreBuildErrors: true, // Ignore TypeScript errors during builds
+  },
+  ```
 
-1. Update the metadata in `app/layout.tsx` with a proper title and description.
-2. Download any required fonts in `app/fonts` and import them into `app/layout.tsx`, properly passing the classname to the root layout element.
-3. Update `favicon.ico` with a project-specific favicon.
-4. Update `tailwind.config.ts` with the color scheme, fonts, and sizes you want to use for the project. This will make it so that you can do e.g. `text-primary` instead of `text-blue-500` everywhere.
+### Deploying Manually
 
-## Best Practices
-
-1. Keep the file structure as flat as possible -- don't nest components into deep folders! Instead, prefer to create reusable components in `@/components` and import them as needed. Next.js uses file-based routing, so page-specific components should go in their respective `page.tsx` file. But for components and other logic-related files, keep them flat.
-2. Use Tailwind CSS utility classes to style components. If it gets repetitive, consider creating a new component.
-3. We use TypeScript, ESLint, and Prettier to ensure type safety and good code quality. Install the relevant plugins for your editor and feel free to use `npm run lint` to check for any issues.
-4. Do **NOT** use `useEffect`!! It almost always isn't necessary and can lead to bugs and incomprehensible code. It should never be used for synchronizing state. Next.js has builtin primitives for fetching data now, so use those instead if you need to fetch data. See [this documentation](https://react.dev/learn/you-might-not-need-an-effect) for more information on why you shouldn't use useEffect.
-5. Import files using **absolute paths**! By default, `@` is an alias for the project directory, so instead of importing from `../../../components/something`, use `@/components/something`. This is much easier to read.
-6. Don't push to `main` directly! Instead, create a new branch and open a pull request. Issue tracking software (e.g. Linear) automatically generates branch names and will link them directly -- use those.
-7. Use [React Context](https://react.dev/learn/passing-data-deeply-with-context) for global state management.
-
-## UI Components
-
-We're using Radix UI Primitives for building UI components. These are a set of low-level components that can be used to build more complex components. They are designed to be unstyled by default, so you can style them however you want. You can find the documentation [here](https://www.radix-ui.com/primitives/docs/overview/introduction).
-
-You'll have to install each of them separately. We've installed `@radix-ui/react-switch` as an example. If you want to install another one, use the following command:
+Use the following command to push to Vercel:
 
 ```bash
-npm install @radix-ui/react-[component-name] --save-dev
+vercel --prod --force
 ```
 
-Then, import the component and use it in your code. You can find the import statement in the documentation for each component.
+## File Structure
 
-## Command Reference
+```
+App
+├── Api
+│   ├── auth
+│   ├── db
+│   │   ├── documents
+│   │   ├── resource
+│   │   ├── resourcemeta
+│   │   ├── (others, need to be reorganized)
+│   ├── resource_parsing
+│   ├── manual-signup
+│   ├── reset-password
+├── Login
+├── Report-home
+├── Signup
+├── Assets
+├── Components
+│   ├── DocumentComponents
+│   ├── GeneralComponents
+│   ├── ModalComponent
+│   ├── PostHogComponent
+│   └── ResourceComponents
+├── Context
+│   ├── AppContext (Resources and Documents)
+│   ├── AuthContext
+│   └── SwitchContext
+```
 
-- `npm run dev` - Start the development server.
-- `npm run build` - Build the project for production.
-- `npm run lint` - Check for any issues.
+## Environment Variables
 
-## Learn More
+- Update `.env` when pushing to production:
+  - Change `NEXTAUTH_URL` from `localhost:3000` to the Vercel deployment URL.
 
-This project uses Next.js, React, Tailwind CSS, and Radix UI Primitives. It is also configured with ESLint and Prettier, which will run before each commit to ensure good code quality when pushing to GitHub. Prettier is configured with the Tailwind plugin to automatically sort CSS classes consistently as well!
+## Parsing
 
-To learn more about Next.js, take a look at the following resources:
+- Parsing is currently disabled.
+  - Change `DISABLE_PARSING` to `false` to enable it.
+- Known Issues:
+  - Some files are skipped during parsing or parsed unnecessarily.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Bugs Identified
 
-To learn more about Tailwind CSS, take a look at the following:
+1. Larger files occasionally fail to upload to the database, Error Code 413.
+2. Parsing bug (see above).
+3. TypeScript rules are not fully enforced.
+4. ESLint rules are not fully enforced.
 
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs) - learn about Tailwind CSS features and API.
+## Not Implemented
 
-To learn more about Radix UI, take a look at the following:
+- Screen resizing for devices smaller than a laptop.
 
-- [Radix UI Documentation](https://www.radix-ui.com/primitives/docs/overview/introduction) - learn about Radix UI Primitives.
+## Contact Information
+
+**Created by:**
+
+- **Web Development at Berkeley** - [webatberkeley@gmail.com](mailto:webatberkeley@gmail.com)
+- **Jason Duong** - [jasonduong@berkeley.edu](mailto:jasonduong@berkeley.edu)
+- **Ashley Zheng** - [ashley.zheng@berkeley.edu](mailto:ashley.zheng@berkeley.edu)
