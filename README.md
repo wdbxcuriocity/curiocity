@@ -89,7 +89,10 @@ App
 
 ## Bugs Identified
 
-1. Larger files occasionally fail to upload to the database, Error Code 413.
+1. Files occasionally fail to upload to the database, Error Code 413.
+
+- Bug most likely occurs in UploadAllFiles function in S3Button.tsx
+
 2. Parsing bug (see above).
 3. TypeScript rules are not fully enforced.
 4. ESLint rules are not fully enforced.

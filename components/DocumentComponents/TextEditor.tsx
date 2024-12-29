@@ -13,11 +13,16 @@ const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 interface TextEditorProps {
   mode?: 'mini' | 'full';
   source: Document | ResourceMeta | undefined;
+  generalCallback?: () => void;
 }
 
-const TextEditor: React.FC<TextEditorProps> = ({ mode, source }) => {
+const TextEditor: React.FC<TextEditorProps> = ({
+  mode,
+  source,
+  generalCallback,
+}) => {
   if (mode === 'full') {
-    return <FullTextEditor source={source} />;
+    return <FullTextEditor source={source} generalCallback={generalCallback} />;
   }
 
   if (mode === 'mini') {
@@ -27,7 +32,10 @@ const TextEditor: React.FC<TextEditorProps> = ({ mode, source }) => {
   return null;
 };
 
-const FullTextEditor: React.FC<TextEditorProps> = ({ source }) => {
+const FullTextEditor: React.FC<TextEditorProps> = ({
+  source,
+  generalCallback,
+}) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [id, setID] = useState<string | undefined>('');
@@ -63,6 +71,7 @@ const FullTextEditor: React.FC<TextEditorProps> = ({ source }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedDocument),
       });
+      setIsUploading(false);
     } catch (error) {
       console.error('Error saving content:', error);
       alert('Failed to save content.');
