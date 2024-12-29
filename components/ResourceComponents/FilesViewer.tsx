@@ -48,7 +48,6 @@ const FileViewer: React.FC = () => {
         )}
       </div>
 
-      {/* Right Panel */}
       <div className='w-1/3 border-l border-gray-700 p-4'>
         <FileList />
       </div>

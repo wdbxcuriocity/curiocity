@@ -1,10 +1,10 @@
 import { useState } from 'react';
 
 interface TagComponentProps {
-  label?: string; // The string to display in the tag
-  newTag?: boolean; // Determines if this tag is a "new" tag
-  onAdd?: (tag: string) => Promise<boolean>; // Async callback for adding a new tag
-  onDelete?: () => void; // Callback for deleting a tag
+  label?: string;
+  newTag?: boolean;
+  onAdd?: (tag: string) => Promise<boolean>;
+  onDelete?: () => void;
 }
 
 export default function TagComponent({
@@ -18,7 +18,7 @@ export default function TagComponent({
 
   const handleAddNewTag = async () => {
     if (!newTagValue.trim()) {
-      return; // Validation for empty tag
+      return;
     }
     if (onAdd) {
       const success = await onAdd(newTagValue.trim());

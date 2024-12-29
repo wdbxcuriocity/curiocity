@@ -23,9 +23,7 @@ export default function ReportHome() {
   const {
     currentDocument,
     setCurrentDocument,
-    allDocuments,
     fetchDocuments,
-    createDocument,
     viewingDocument,
     setViewingDocument,
     fetchDocument,
@@ -33,21 +31,11 @@ export default function ReportHome() {
 
   const { setCurrentResource, setCurrentResourceMeta } = useCurrentResource();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (session?.user?.id) fetchDocuments();
   }, [session]);
-
-  const handleSaveNewReport = async (name: string) => {
-    if (!session?.user?.id) {
-      console.error('User ID not found. Please log in.');
-      return;
-    }
-    await createDocument(name, session.user.id);
-    setIsModalOpen(false);
-  };
 
   const handleBack = () => {
     fetchDocuments();
@@ -103,7 +91,6 @@ export default function ReportHome() {
             </div>
           </ResizablePanel>
 
-          {/* Render the second panel only if currentDocument exists */}
           {currentDocument && (
             <>
               <ResizableHandle

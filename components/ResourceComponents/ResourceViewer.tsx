@@ -1,26 +1,23 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import TextEditor from '@/components/DocumentComponents/TextEditor';
 import { useCurrentResource } from '@/context/AppContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import NotesEditor from '@/components/ResourceComponents/NotesEditor';
 import Image from 'next/image';
-import NameEditor from './NameEditor';
 import { Switch } from '../ui/switch';
-import Divider from '../GeneralComponents/Divider';
+import Divider from '@/components/GeneralComponents/Divider';
 import { FaSpinner } from 'react-icons/fa';
 
 const ResourceViewer: React.FC = () => {
-  const { currentResourceMeta, setCurrentResourceMeta } = useCurrentResource();
+  const { currentResourceMeta } = useCurrentResource();
   const [viewMode, setViewMode] = useState<'URL' | 'Text'>('URL');
   const [csvData, setCsvData] = useState<string[][] | null>(null);
-  const [showEditor, setShowEditor] = useState(false); // Initialize as false
+  const [showEditor, setShowEditor] = useState(false);
   const [resource, setResource] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch the resource data
   const fetchResource = async () => {
     if (!currentResourceMeta?.hash) {
       console.error('Resource hash is missing. Cannot fetch resource.');
@@ -54,7 +51,6 @@ const ResourceViewer: React.FC = () => {
     fetchResource();
   }, [currentResourceMeta]);
 
-  // Handle CSV loading
   useEffect(() => {
     if (resource && resource.url.toLowerCase().endsWith('.csv')) {
       fetch(resource.url)

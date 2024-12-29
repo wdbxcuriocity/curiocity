@@ -5,11 +5,14 @@ import TextInput from '@/components/GeneralComponents/TextInput';
 import NewDocumentModal from '@/components/ModalComponents/NewDocumentModal';
 import { useState } from 'react';
 import { useCurrentDocument } from '@/context/AppContext';
-import { useSession } from 'next-auth/react';
 
-export default function AllDocumentGrid({ onDocumentClick }) {
-  const { data: session } = useSession();
-  const { allDocuments, createDocument } = useCurrentDocument();
+interface AllDocumentGridProps {
+  onDocumentClick: (id: string) => void;
+}
+export default function AllDocumentGrid({
+  onDocumentClick,
+}: AllDocumentGridProps) {
+  const { allDocuments } = useCurrentDocument();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSortedByLastOpened, setIsSortedByLastOpened] = useState(false);
@@ -20,14 +23,14 @@ export default function AllDocumentGrid({ onDocumentClick }) {
     const dateB = new Date(isSortedByLastOpened ? a.lastOpened : a.dateAdded);
 
     if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
-      return 0; // Fallback sorting if dates are invalid
+      return 0;
     }
 
     return dateA.getTime() - dateB.getTime();
   });
 
   const filteredDocuments = sortedDocuments.filter((doc) => {
-    if (!searchQuery.trim()) return true; // Show all if no query
+    if (!searchQuery.trim()) return true;
     return (
       doc.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.text?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -82,6 +85,7 @@ export default function AllDocumentGrid({ onDocumentClick }) {
               <GridItem
                 key={doc.id}
                 document={doc}
+                // Able to remove and use useContext
                 onClick={() => onDocumentClick(doc.id)} // Pass down onDocumentClick
               />
             ))}

@@ -5,11 +5,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 import DeleteConfirmationModal from '../ModalComponents/DeleteConfirmationModal';
-import { useCurrentDocument } from '@/context/AppContext';
 
 interface MoreOptionsDropdownProps {
   documentId?: string;
@@ -21,27 +19,26 @@ const MoreOptionsDropdown: React.FC<MoreOptionsDropdownProps> = ({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevents event bubbling
-    setIsDeleteModalOpen(true); // Open the delete confirmation modal
+    e.stopPropagation();
+    setIsDeleteModalOpen(true);
   };
 
   const handleModalClose = () => {
-    setIsDeleteModalOpen(false); // Close the modal
+    setIsDeleteModalOpen(false);
   };
 
   const handleDeleteComplete = () => {
-    setIsDeleteModalOpen(false); // Close the modal after deletion
+    setIsDeleteModalOpen(false);
   };
 
   return (
     <>
-      {/* Dropdown Menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant='ghost'
             className='h-8 w-8 p-0 text-white'
-            onClick={(e) => e.stopPropagation()} // Prevent opening document when menu is clicked
+            onClick={(e) => e.stopPropagation()}
           >
             <span className='sr-only'>Open menu</span>
             ...
@@ -54,7 +51,6 @@ const MoreOptionsDropdown: React.FC<MoreOptionsDropdownProps> = ({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Delete Confirmation Modal */}
       {isDeleteModalOpen && (
         <DeleteConfirmationModal
           documentId={documentId || ''}

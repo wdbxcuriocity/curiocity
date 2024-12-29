@@ -1,12 +1,12 @@
 import MoreOptionsDropdown from './MoreOptionsDropdown';
-import { Document } from '@/types/types'; // Import the Document type
+import { Document } from '@/types/types';
 
 function stripHtmlTags(text: string) {
   return text.replace(/<\/?[^>]+(>|$)/g, '');
 }
 
 interface Props {
-  document: Document; // Use the Document type for the document prop
+  document: Document;
   onClick: () => void;
 }
 

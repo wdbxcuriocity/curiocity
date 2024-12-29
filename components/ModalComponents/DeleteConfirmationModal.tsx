@@ -17,11 +17,11 @@ const DeleteConfirmationModal: React.FC<DeleteProps> = ({
   onClose,
 }) => {
   const { fetchDocuments } = useCurrentDocument();
-  const [isDeleting, setIsDeleting] = useState(false); // Track deletion state
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevents event propagation to parent
-    setIsDeleting(true); // Show loading overlay
+    e.stopPropagation();
+    setIsDeleting(true);
     try {
       const response = await fetch('/api/db', {
         method: 'DELETE',
@@ -39,7 +39,7 @@ const DeleteConfirmationModal: React.FC<DeleteProps> = ({
       console.log(result, documentId);
 
       fetchDocuments();
-      onClose(); // Close modal
+      onClose();
     } catch (error) {
       console.error('Error deleting file:', error);
     } finally {

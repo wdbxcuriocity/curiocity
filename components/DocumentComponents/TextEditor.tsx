@@ -8,40 +8,30 @@ import TagSection from '@/components/DocumentComponents/TagSection';
 import Divider from '../GeneralComponents/Divider';
 import { FaSpinner } from 'react-icons/fa';
 
-// Dynamically import ReactQuill with SSR disabled
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 interface TextEditorProps {
-  mode: 'mini' | 'full';
+  mode?: 'mini' | 'full';
   source: Document | ResourceMeta | undefined;
-  generalCallback: () => void;
 }
 
-const TextEditor: React.FC<TextEditorProps> = ({
-  mode,
-  source,
-  generalCallback,
-}) => {
+const TextEditor: React.FC<TextEditorProps> = ({ mode, source }) => {
   if (mode === 'full') {
-    return <FullTextEditor source={source} generalCallback={generalCallback} />;
+    return <FullTextEditor source={source} />;
   }
 
   if (mode === 'mini') {
-    return <MiniTextEditor source={source} generalCallback={generalCallback} />;
+    return <MiniTextEditor source={source} />;
   }
 
   return null;
 };
 
-const FullTextEditor: React.FC<TextEditorProps> = ({
-  source,
-  generalCallback,
-}) => {
+const FullTextEditor: React.FC<TextEditorProps> = ({ source }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [id, setID] = useState<string | undefined>('');
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadComplete, setUploadComplete] = useState(false);
 
   useEffect(() => {
     if (!source) return;
@@ -73,13 +63,9 @@ const FullTextEditor: React.FC<TextEditorProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedDocument),
       });
-
-      setUploadComplete(true);
     } catch (error) {
       console.error('Error saving content:', error);
       alert('Failed to save content.');
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -178,12 +164,8 @@ const FullTextEditor: React.FC<TextEditorProps> = ({
   );
 };
 
-const MiniTextEditor: React.FC<TextEditorProps> = ({
-  source,
-  generalCallback,
-}) => {
+const MiniTextEditor: React.FC<TextEditorProps> = ({ source }) => {
   const [content, setContent] = useState('');
-  const [id, setID] = useState<string | undefined>('');
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
@@ -191,7 +173,6 @@ const MiniTextEditor: React.FC<TextEditorProps> = ({
 
     const resourceMeta = source as ResourceMeta;
     setContent(resourceMeta.notes || '');
-    setID(resourceMeta.id || '');
   }, [source]);
 
   const handleSave = async () => {
@@ -223,12 +204,12 @@ const MiniTextEditor: React.FC<TextEditorProps> = ({
       <ReactQuill
         className='scrollbar-hide h-full max-w-full overflow-y-auto bg-transparent px-2 py-1 text-white'
         modules={{
-          toolbar: false, // Disable the toolbar
+          toolbar: false,
         }}
         value={content}
         onChange={setContent}
         style={{
-          maxHeight: '5rem', // Approx 3 lines of text (adjust as needed)
+          maxHeight: '5rem',
           overflowY: 'auto',
         }}
       />

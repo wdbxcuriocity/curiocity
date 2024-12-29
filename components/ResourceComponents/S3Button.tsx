@@ -12,10 +12,8 @@ interface S3ButtonProps {
 }
 
 const S3Button = ({ onBack }: S3ButtonProps) => {
-  // need to create new use Context called for global states such as loading, showS3,etc
   const { uploadResource } = useCurrentResource();
-  const { currentDocument, fetchDocument, setCurrentDocument } =
-    useCurrentDocument();
+  const { currentDocument, fetchDocument } = useCurrentDocument();
 
   const [selectedFolder, setSelectedFolder] = useState<string>('');
   const [isNewFolder, setIsNewFolder] = useState(false);
@@ -56,7 +54,7 @@ const S3Button = ({ onBack }: S3ButtonProps) => {
           console.error(`Error uploading file ${file.name}:`, error);
         }
       }
-
+      // Work around needed to allow database to update - jason 12/29
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await fetchDocument(currentDocument.id);
       setFileQueue([]);

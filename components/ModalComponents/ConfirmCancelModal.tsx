@@ -1,5 +1,3 @@
-// components/ConfirmCancelModal.tsx
-
 import React from 'react';
 
 interface ConfirmCancelModalProps {

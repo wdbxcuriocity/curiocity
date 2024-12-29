@@ -5,12 +5,11 @@ import TextEditor from '@/components/DocumentComponents/TextEditor';
 import { useCurrentResource } from '@/context/AppContext';
 
 const NotesEditor: React.FC<{ handleBack: () => void }> = ({ handleBack }) => {
-  const { currentResourceMeta } = useCurrentResource(); // Access the current resourceMeta from context
+  const { currentResourceMeta } = useCurrentResource();
   const [notes, setNotes] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch notes using currentResourceMeta.id
   useEffect(() => {
     if (!currentResourceMeta) {
       setError('No resource selected.');
@@ -29,7 +28,7 @@ const NotesEditor: React.FC<{ handleBack: () => void }> = ({ handleBack }) => {
           throw new Error(`Failed to fetch notes: ${response.statusText}`);
         }
         const data = await response.json();
-        setNotes(data.notes || ''); // Fallback to an empty string if no notes exist
+        setNotes(data.notes || '');
       } catch (err) {
         console.error(err);
         setError('Failed to load notes. Please try again.');
@@ -41,7 +40,6 @@ const NotesEditor: React.FC<{ handleBack: () => void }> = ({ handleBack }) => {
     fetchNotes();
   }, [currentResourceMeta]);
 
-  // Render loading/error states
   if (isLoading) {
     return (
       <div className='flex items-center justify-center'>
@@ -66,12 +64,11 @@ const NotesEditor: React.FC<{ handleBack: () => void }> = ({ handleBack }) => {
     );
   }
 
-  // Render the TextEditor once notes are loaded
   return (
     <div className='flex flex-col text-white'>
       <TextEditor
         mode='mini'
-        source={{ ...currentResourceMeta, notes }} // Pass fetched notes to TextEditor
+        source={{ ...currentResourceMeta, notes }}
         generalCallback={handleBack}
       />
     </div>

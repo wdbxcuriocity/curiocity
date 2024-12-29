@@ -4,14 +4,6 @@ export const runtime = 'edge';
 
 const LLAMA_CLOUD_API_KEY = process.env.LLAMA_CLOUD_API_KEY;
 
-interface ResponseData {
-  pages: {
-    text?: string;
-    md?: string;
-    images?: { url: string }[];
-  }[];
-}
-
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();

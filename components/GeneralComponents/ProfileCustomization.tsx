@@ -2,7 +2,7 @@
 
 import { useState, useEffect, ChangeEvent } from 'react';
 import { useSession } from 'next-auth/react';
-import { AvatarIcon, Cross2Icon } from '@radix-ui/react-icons';
+import { Cross2Icon } from '@radix-ui/react-icons';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import {
@@ -16,7 +16,6 @@ import {
 import { useForm, SubmitHandler, FieldValues } from 'react-hook-form';
 import ResetPasswordButton from './ResetPasswordButton';
 
-// Define the form values type
 interface ChangeUserFormValues extends FieldValues {
   username: string;
   email: string;
@@ -96,14 +95,11 @@ export default function ProfileCustomization({
       if (!profileResponse.ok) {
         throw new Error('Failed to update profile');
       }
-
-      console.log('Profile updated successfully');
-      // Update the session to reflect new profile info
       await updateSession();
 
-      await updateSession(); // Refresh session to reflect updates
-      onProfileUpdate(); // Notify parent of the profile update
-      handleCloseModal(); // Close modal after successful update
+      await updateSession();
+      onProfileUpdate();
+      handleCloseModal();
     } catch (error) {
       console.error('Error updating profile:', error);
     }

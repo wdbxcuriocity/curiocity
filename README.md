@@ -94,9 +94,17 @@ App
 3. TypeScript rules are not fully enforced.
 4. ESLint rules are not fully enforced.
 
+## Minor Issues
+
+1. Imports are not standarized using root (@/..)
+
 ## Not Implemented
 
 - Screen resizing for devices smaller than a laptop.
+
+## Feature Recommendations
+
+- Create /utils to move all api calls
 
 ## Contact Information
 

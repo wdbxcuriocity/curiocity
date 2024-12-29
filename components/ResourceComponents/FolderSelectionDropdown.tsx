@@ -3,7 +3,7 @@ import { FaChevronDown } from 'react-icons/fa';
 
 interface FolderDropdownProps {
   possibleFolders: Array<string>;
-  selectedFolder?: string; // Optional prop for flexibility
+  selectedFolder?: string;
   onFolderChange: (folderName: string) => void;
 }
 
@@ -22,7 +22,6 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({
   };
 
   useEffect(() => {
-    // Ensure a default folder is always selected
     if (!selectedFolder) {
       onFolderChange('General');
     }

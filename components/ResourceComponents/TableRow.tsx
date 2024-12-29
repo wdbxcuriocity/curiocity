@@ -20,7 +20,6 @@ const TableRow = ({
   const {
     moveResource,
     fetchResourceAndMeta,
-    currentResource,
     currentResourceMeta,
     setCurrentResource,
     setCurrentResourceMeta,
@@ -77,9 +76,9 @@ const TableRow = ({
   };
 
   const handleMoveTo = async (targetFolderName: string) => {
-    setIsMoving(true); // Start moving loading state
+    setIsMoving(true);
     try {
-      setIsDropdownOpen(false); // Close dropdown
+      setIsDropdownOpen(false);
       await moveResource(
         resourceCompressed.id,
         folderName,
@@ -90,7 +89,7 @@ const TableRow = ({
     } catch (error) {
       console.error('Error in moving resource:', error);
     } finally {
-      setIsMoving(false); // End moving loading state
+      setIsMoving(false);
       setIsMoveListOpen(false);
     }
   };
@@ -108,7 +107,6 @@ const TableRow = ({
         throw new Error('Failed to delete resource.');
       }
 
-      // Check if the resource being deleted is the current one displayed
       if (currentResourceMeta?.id === resourceCompressed.id) {
         setCurrentResource(null);
         setCurrentResourceMeta(null);
@@ -144,7 +142,6 @@ const TableRow = ({
     return <FaFile className='text-gray-500' />;
   };
 
-  // Determine row background color
   const rowClass =
     resourceCompressed.id === currentResourceMeta?.id
       ? 'bg-gray-500'

@@ -6,13 +6,13 @@ import TagComponent from './TagComponent';
 import ErrorModal from '@/components/ModalComponents/ErrorModal';
 
 export default function TagSection() {
-  const { currentDocument, setCurrentDocument } = useCurrentDocument(); // Access current document
+  const { currentDocument, setCurrentDocument } = useCurrentDocument();
   const [tags, setTags] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentDocument) {
-      setTags(currentDocument.tags || []); // Set initial tags from the current document
+      setTags(currentDocument.tags || []);
     }
   }, [currentDocument]);
 
@@ -28,7 +28,6 @@ export default function TagSection() {
 
       if (res.ok) {
         setTags((prevTags) => prevTags.filter((t) => t !== tag));
-        // Update the tags in the current document
         setCurrentDocument({
           ...currentDocument,
           tags: currentDocument.tags.filter((t) => t !== tag),
@@ -59,7 +58,6 @@ export default function TagSection() {
 
       if (res.ok) {
         setTags((prevTags) => [...prevTags, newTag]);
-        // Update the tags in the current document
         setCurrentDocument({
           ...currentDocument,
           tags: [...(currentDocument.tags || []), newTag],

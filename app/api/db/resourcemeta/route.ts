@@ -4,11 +4,6 @@ import { v4 as uuidv4 } from 'uuid';
 import AWS from 'aws-sdk';
 import crypto from 'crypto';
 import { putObject, getObject } from '../route';
-import {
-  GetCommand,
-  UpdateCommand,
-  DeleteCommand,
-} from '@aws-sdk/lib-dynamodb';
 
 import {
   Resource,

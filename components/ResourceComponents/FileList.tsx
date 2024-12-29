@@ -139,7 +139,6 @@ const FilterModal = ({
   setSelectedSortOrder,
   selectedFileTypes,
   setSelectedFileTypes,
-  selectedDateRange,
   setSelectedDateRange,
   availableFileTypes,
 }) => {

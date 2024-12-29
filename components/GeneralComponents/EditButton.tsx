@@ -4,7 +4,7 @@ import { Pencil1Icon } from '@radix-ui/react-icons';
 interface EditButtonProps {
   onClick: () => void;
   tooltip?: string;
-  size?: number; // The size in Tailwind units (e.g., `4`, `6`, etc.)
+  size?: number;
 }
 
 const EditButton: React.FC<EditButtonProps> = ({
@@ -12,7 +12,7 @@ const EditButton: React.FC<EditButtonProps> = ({
   tooltip = 'Edit',
   size = 4,
 }) => {
-  const sizeClass = `h-${size} w-${size}`; // Dynamic class construction
+  const sizeClass = `h-${size} w-${size}`;
 
   return (
     <button

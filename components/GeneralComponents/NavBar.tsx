@@ -18,7 +18,6 @@ export default function NavBar({ onLogoClick }: NavBarProps) {
     await signOut({ redirect: false })
       .then(() => {
         console.log(session, 'logout attempt');
-        // posthog
         if (session && session.user) {
           fetch('/api/analytics', {
             method: 'POST',
@@ -32,7 +31,6 @@ export default function NavBar({ onLogoClick }: NavBarProps) {
         }
       })
       .catch(() => {
-        // posthog
         if (session && session.user) {
           fetch('/api/analytics', {
             method: 'POST',
@@ -65,7 +63,7 @@ export default function NavBar({ onLogoClick }: NavBarProps) {
         <div className='flex h-full items-center gap-4'>
           <ProfileCustomization
             onProfileUpdate={async () => {
-              await router.refresh(); // Reload to reflect the updated session
+              await router.refresh();
             }}
           />
           <div className='grid h-10 w-10 place-items-center rounded-lg border-2 border-fileBlue transition-colors duration-200 hover:bg-gray-700'>

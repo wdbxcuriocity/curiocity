@@ -4,7 +4,6 @@ import {
   UpdateCommand,
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
-import AWS from 'aws-sdk';
 
 const client = new DynamoDBClient({ region: 'us-west-1' });
 export const documentTable = process.env.DOCUMENT_TABLE || '';

@@ -1,4 +1,3 @@
-// components/AuthButton.tsx
 'use client';
 
 import { useSession, signIn, signOut } from 'next-auth/react';
@@ -28,5 +27,3 @@ const AuthButton: React.FC = () => {
 };
 
 export default AuthButton;
-
-// test2

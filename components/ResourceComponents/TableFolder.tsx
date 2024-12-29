@@ -56,7 +56,7 @@ const Folder = ({ folderData, isExpanded, onToggle }: FolderProps) => {
 
       console.log('Folder renamed successfully.');
       setIsRenaming(false);
-      fetchDocument(currentDocument.id); // Refresh the document
+      fetchDocument(currentDocument.id);
     } catch (error) {
       console.error('Error renaming folder:', error);
     }

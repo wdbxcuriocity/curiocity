@@ -1,20 +1,11 @@
 import dotenv from 'dotenv';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { v4 as uuidv4 } from 'uuid';
-import AWS from 'aws-sdk';
-import crypto from 'crypto';
+
 import {
   GetCommand,
   UpdateCommand,
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
-
-import {
-  Resource,
-  Document,
-  ResourceMeta,
-  ResourceCompressed,
-} from '@/types/types';
 
 dotenv.config();
 
@@ -55,9 +46,7 @@ export async function DELETE(request: Request) {
 
     let folderUpdated = false;
 
-    for (const [folderName, folder] of Object.entries(
-      existingDocument.folders,
-    )) {
+    for (const [folder] of Object.entries(existingDocument.folders)) {
       const originalLength = folder.resources?.length || 0;
       folder.resources = (folder.resources || []).filter(
         (resource: any) => resource.id !== resourceId,
