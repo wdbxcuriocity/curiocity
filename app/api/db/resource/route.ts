@@ -5,6 +5,8 @@ import { Resource, getObject } from '../route';
 
 dotenv.config();
 
+export const dynamic = 'force-dynamic'; // Ensure this API route is dynamic
+
 const client = new DynamoDBClient({ region: 'us-west-1' });
 const resourceTable = process.env.RESOURCE_TABLE || '';
 

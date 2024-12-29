@@ -1,26 +1,36 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { usePostHog } from 'posthog-js/react';
 
-export default function PostHogPageView(): null {
+function PostHogTracker() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const posthog = usePostHog();
+
   useEffect(() => {
-    // Track pageviews
-    if (pathname && posthog) {
+    // Ensure this runs on the client-side
+    if (typeof window !== 'undefined' && pathname && posthog) {
       console.log('>>> posthog >>>');
-      let url = window.origin + pathname;
+      let url = `${window.location.origin}${pathname}`;
       if (searchParams.toString()) {
-        url = url + `?${searchParams.toString()}`;
+        url += `?${searchParams.toString()}`;
       }
+
       posthog.capture('$pageview', {
         $current_url: url,
       });
     }
   }, [pathname, searchParams, posthog]);
 
-  return null;
+  return null; // This component has no visual output
+}
+
+export default function PostHogPageView() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <PostHogTracker />
+    </Suspense>
+  );
 }

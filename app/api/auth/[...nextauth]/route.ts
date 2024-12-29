@@ -106,6 +106,7 @@ const options: NextAuthOptions = {
         };
 
         try {
+          console.log(`${process.env.NEXTAUTH_URL}/api/user?id=${userId}`);
           const existingUserResponse = await fetch(
             `${process.env.NEXTAUTH_URL}/api/user?id=${userId}`,
             { method: 'GET', headers: { 'Content-Type': 'application/json' } },

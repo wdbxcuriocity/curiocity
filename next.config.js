@@ -18,14 +18,10 @@ module.exports = {
     });
     return config;
   },
-  typescript: {
-    // !! WARN !!
-    // Dangerously allow production builds to successfully complete even if
-    // your project has type errors.
-    // !! WARN !!
-    ignoreBuildErrors: true,
-  },
   eslint: {
-    ignoreDuringBuilds: true, // Disables ESLint checks during builds
+    ignoreDuringBuilds: true, // Ignore ESLint during builds
+  },
+  typescript: {
+    ignoreBuildErrors: true, // Ignore TypeScript errors during builds
   },
 };
