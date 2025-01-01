@@ -32,9 +32,8 @@ export default function ReportHome() {
   const { setCurrentResource, setCurrentResourceMeta } = useCurrentResource();
 
   const [isLoading, setIsLoading] = useState(false);
-
   useEffect(() => {
-    if (session?.user?.id) fetchDocuments();
+    if (session?.user) fetchDocuments();
   }, [session, fetchDocuments]);
 
   const handleBack = () => {

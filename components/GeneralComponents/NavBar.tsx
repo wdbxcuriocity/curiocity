@@ -7,54 +7,94 @@ import logoIconSmall from '@/assets/logo.png';
 import { GearIcon } from '@radix-ui/react-icons';
 import ProfileCustomization from './ProfileCustomization';
 
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+    };
+  }
+}
+
 interface NavBarProps {
   onLogoClick?: () => void;
 }
 
-export default function NavBar({ onLogoClick }: NavBarProps) {
+interface AnalyticsEvent {
+  event: 'Sign Out Successful' | 'Sign Out Failed';
+  id: string;
+  properties: Record<string, unknown>;
+}
+
+async function logAnalytics(event: AnalyticsEvent): Promise<void> {
+  try {
+    const response = await fetch('/api/analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(event),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Analytics request failed: ${response.statusText}`);
+    }
+  } catch (error: unknown) {
+    console.error(
+      'Failed to log analytics:',
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+export default function NavBar({ onLogoClick }: Readonly<NavBarProps>) {
   const { data: session } = useSession();
   const router = useRouter();
 
   const handleSignOut = async () => {
-    await signOut({ redirect: false })
-      .then(() => {
-        console.log(session, 'logout attempt');
-        if (session && session.user) {
-          fetch('/api/analytics', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: 'Sign Out Successful',
-              id: session?.user.id,
-              properties: {},
-            }),
-          });
-        }
-      })
-      .catch(() => {
-        if (session && session.user) {
-          fetch('/api/analytics', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: 'Sign Out Failed',
-              id: session?.user.id,
-              properties: {},
-            }),
-          });
-        }
-      });
+    try {
+      await signOut({ redirect: false });
 
-    router.push('/login');
+      if (session?.user?.id) {
+        await logAnalytics({
+          event: 'Sign Out Successful',
+          id: session.user.id,
+          properties: {},
+        });
+      }
+    } catch (error: unknown) {
+      if (session?.user?.id) {
+        await logAnalytics({
+          event: 'Sign Out Failed',
+          id: session.user.id,
+          properties: {},
+        });
+      }
+      console.error(
+        'Sign out failed:',
+        error instanceof Error ? error.message : error,
+      );
+    } finally {
+      router.push('/login');
+    }
   };
 
   return (
     <div className='h-18 w-full px-8'>
       <div className='flex h-full items-center justify-between py-2'>
         <div className='flex h-full items-center'>
-          <div className='relative h-14 w-14 p-2' onClick={onLogoClick}>
+          <button
+            className='focus:ring-primary relative h-14 w-14 p-2 focus:outline-none focus:ring-2'
+            onClick={onLogoClick}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                onLogoClick?.();
+              }
+            }}
+            aria-label='Return to home'
+          >
             <Image src={logoIconSmall} alt='Logo' />
-          </div>
+          </button>
           <p className='text-4xl font-extrabold italic text-textPrimary'>
             APEX
           </p>
@@ -67,12 +107,19 @@ export default function NavBar({ onLogoClick }: NavBarProps) {
               await router.refresh();
             }}
           />
-          <div className='grid h-10 w-10 place-items-center rounded-lg border-2 border-fileBlue transition-colors duration-200 hover:bg-gray-700'>
+          <button
+            className='focus:ring-primary grid h-10 w-10 place-items-center rounded-lg border-2 border-fileBlue transition-colors duration-200 hover:bg-gray-700 focus:outline-none focus:ring-2'
+            onClick={() => {
+              /* TODO: Add settings handler */
+            }}
+            aria-label='Open settings'
+          >
             <GearIcon className='h-6 w-6 text-fileBlue' />
-          </div>
+          </button>
           <button
             onClick={handleSignOut}
-            className='grid h-10 w-10 place-items-center rounded-lg border-2 border-fileRed transition-colors duration-200 hover:bg-gray-700'
+            className='focus:ring-primary grid h-10 w-10 place-items-center rounded-lg border-2 border-fileRed transition-colors duration-200 hover:bg-gray-700 focus:outline-none focus:ring-2'
+            aria-label='Sign out'
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'

@@ -11,43 +11,45 @@ import { FaSpinner } from 'react-icons/fa';
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 interface TextEditorProps {
-  mode?: 'mini' | 'full';
-  source: Document | ResourceMeta | undefined;
-  generalCallback?: () => void;
+  readonly mode?: 'mini' | 'full';
+  readonly source?: Document | ResourceMeta;
+  readonly generalCallback?: () => void;
 }
 
-const TextEditor: React.FC<TextEditorProps> = ({
-  mode,
+interface EditorState {
+  content: string;
+  title: string;
+  isUploading: boolean;
+}
+
+export default function TextEditor({
+  mode = 'full',
   source,
   generalCallback,
-}) => {
-  if (mode === 'full') {
-    return <FullTextEditor source={source} generalCallback={generalCallback} />;
-  }
-
-  if (mode === 'mini') {
-    return <MiniTextEditor source={source} />;
-  }
-
-  return null;
-};
-
-const FullTextEditor: React.FC<TextEditorProps> = ({
-  source,
-  generalCallback,
-}) => {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [id, setID] = useState<string | undefined>('');
-  const [isUploading, setIsUploading] = useState(false);
+}: TextEditorProps) {
+  const [state, setState] = useState<EditorState>({
+    content: '',
+    title: '',
+    isUploading: false,
+  });
 
   useEffect(() => {
     if (!source) return;
 
-    const document = source as Document;
-    setTitle(document.name || '');
-    setContent(document.text || '');
-    setID(document.id || '');
+    if ('text' in source) {
+      // Document type
+      setState((prev) => ({
+        ...prev,
+        content: source.text || '',
+        title: source.name || '',
+      }));
+    } else {
+      // ResourceMeta type
+      setState((prev) => ({
+        ...prev,
+        content: source.notes || '',
+      }));
+    }
   }, [source]);
 
   const handleSave = async () => {
@@ -56,63 +58,118 @@ const FullTextEditor: React.FC<TextEditorProps> = ({
       return;
     }
 
-    setIsUploading(true);
+    setState((prev) => ({ ...prev, isUploading: true }));
 
     try {
-      const document = source as Document;
-      const updatedDocument: Document = {
-        ...document,
-        name: title,
-        text: content,
-      };
+      if ('text' in source) {
+        // Document type
+        const updatedDoc: Document = {
+          ...source,
+          name: state.title,
+          text: state.content,
+        };
 
-      await fetch('/api/db', {
-        method: document.id ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedDocument),
-      });
-      setIsUploading(false);
+        const response = await fetch('/api/db', {
+          method: source.id ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedDoc),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save document');
+        }
+      } else {
+        // ResourceMeta type
+        const response = await fetch('/api/db/resourcemeta/notes', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: source.id, notes: state.content }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save notes');
+        }
+      }
     } catch (error) {
-      console.error('Error saving content:', error);
-      alert('Failed to save content.');
+      console.error('Error saving:', error);
+      throw error;
+    } finally {
+      setState((prev) => ({ ...prev, isUploading: false }));
     }
+  };
+
+  const handleContentChange = (newContent: string) => {
+    setState((prev) => ({ ...prev, content: newContent }));
   };
 
   const handleTitleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
-    setTitle(newTitle);
+    setState((prev) => ({ ...prev, title: newTitle }));
 
-    if (!source) return;
-
-    const document = source as Document;
-    const updatedDocument: Document = {
-      ...document,
-      name: newTitle,
-      text: content,
-    };
+    if (!source || !('text' in source)) return;
 
     try {
-      await fetch('/api/db', {
+      const updatedDoc: Document = {
+        ...source,
+        name: newTitle,
+        text: state.content,
+      };
+
+      const response = await fetch('/api/db', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedDocument),
+        body: JSON.stringify(updatedDoc),
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to update title');
+      }
     } catch (error) {
       console.error('Error updating title:', error);
     }
   };
 
+  if (mode === 'mini') {
+    return (
+      <div className='flex h-full max-w-full flex-col rounded-xl bg-gray-900 text-white'>
+        <ReactQuill
+          className='scrollbar-hide h-full max-w-full overflow-y-auto bg-transparent px-2 py-1 text-white'
+          modules={{ toolbar: false }}
+          value={state.content}
+          onChange={handleContentChange}
+          style={{ maxHeight: '5rem', overflowY: 'auto' }}
+          data-testid='react-quill'
+        />
+        <div className='flex items-center justify-end space-x-4 rounded-b-xl p-4'>
+          {state.isUploading ? (
+            <div className='flex items-center justify-center'>
+              <FaSpinner className='mr-3 animate-spin text-lg' />
+              <span className='text-gray-400'>Saving...</span>
+            </div>
+          ) : (
+            <button
+              onClick={handleSave}
+              className='w-full whitespace-nowrap rounded-md border border-zinc-700 bg-gray-800 px-2 py-1 text-xs text-white transition ease-in-out hover:bg-gray-700'
+            >
+              Save
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='flex h-full max-w-full flex-col rounded-xl p-4 text-white'>
       <input
         type='text'
-        value={title}
+        value={state.title}
         onChange={handleTitleChange}
         onBlur={handleTitleChange}
         placeholder='Enter document title'
         className='text-gray-200outline-none mb-2 w-full rounded-t-xl bg-bgSecondary text-lg font-bold'
       />
-      {id && <TagSection />}
+      {'text' in (source || {}) && <TagSection />}
       <Divider />
       <div className='h-full'>
         <style>
@@ -165,17 +222,17 @@ const FullTextEditor: React.FC<TextEditorProps> = ({
             ],
             clipboard: { matchVisual: false },
           }}
-          value={content}
-          onChange={setContent}
+          value={state.content}
+          onChange={handleContentChange}
           placeholder='Write something amazing...'
         />
       </div>
       <Divider />
       <div className='flex items-center justify-end space-x-4 rounded-b-xl p-4'>
-        {isUploading ? (
+        {state.isUploading ? (
           <div className='flex items-center justify-center'>
             <FaSpinner className='mr-3 animate-spin text-lg' />
-            <span className='text-gray-400'>Uploading...</span>
+            <span className='text-gray-400'>Saving...</span>
           </div>
         ) : (
           <>
@@ -196,78 +253,4 @@ const FullTextEditor: React.FC<TextEditorProps> = ({
       </div>
     </div>
   );
-};
-
-const MiniTextEditor: React.FC<TextEditorProps> = ({ source }) => {
-  const [content, setContent] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-
-  useEffect(() => {
-    if (!source) return;
-
-    const resourceMeta = source as ResourceMeta;
-    setContent(resourceMeta.notes || '');
-  }, [source]);
-
-  const handleSave = async () => {
-    if (!source) {
-      console.error('No source provided for saving.');
-      return;
-    }
-
-    setIsUploading(true);
-
-    try {
-      const resourceMeta = source as ResourceMeta;
-
-      await fetch(`/api/db/resourcemeta/notes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: resourceMeta.id, notes: content }),
-      });
-    } catch (error) {
-      console.error('Error saving notes:', error);
-      alert('Failed to save notes.');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  return (
-    <div className='flex h-full max-w-full flex-col rounded-xl bg-gray-900 text-white'>
-      <ReactQuill
-        className='scrollbar-hide h-full max-w-full overflow-y-auto bg-transparent px-2 py-1 text-white'
-        modules={{
-          toolbar: false,
-        }}
-        value={content}
-        onChange={setContent}
-        style={{
-          maxHeight: '5rem',
-          overflowY: 'auto',
-        }}
-        data-testid='react-quill'
-      />
-
-      <div className='flex items-center justify-end space-x-4 rounded-b-xl p-4'>
-        {isUploading ? (
-          <div className='flex items-center justify-center'>
-            <FaSpinner className='mr-3 animate-spin text-lg' />
-            <span className='text-gray-400'>Uploading...</span>
-          </div>
-        ) : (
-          <>
-            <button
-              onClick={handleSave}
-              className='w-full whitespace-nowrap rounded-md border border-zinc-700 bg-gray-800 px-2 py-1 text-xs text-white transition ease-in-out hover:bg-gray-700'
-            >
-              Save
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default TextEditor;
+}

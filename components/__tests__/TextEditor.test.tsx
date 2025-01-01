@@ -40,11 +40,12 @@ describe('TextEditor Component', () => {
   const mockCallback = jest.fn();
 
   beforeEach(() => {
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
+    global.fetch = jest.fn().mockImplementation(() => {
+      return Promise.resolve({
+        ok: true,
         json: () => Promise.resolve({ message: 'Success' }),
-      }),
-    ) as jest.Mock;
+      });
+    }) as jest.Mock;
   });
 
   afterEach(() => {

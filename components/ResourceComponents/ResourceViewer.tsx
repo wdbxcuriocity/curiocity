@@ -5,20 +5,28 @@ import { useCurrentResource } from '@/context/AppContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import NotesEditor from '@/components/ResourceComponents/NotesEditor';
-import Image from 'next/image';
 import { Switch } from '../ui/switch';
 import Divider from '@/components/GeneralComponents/Divider';
 import { FaSpinner } from 'react-icons/fa';
+import dynamic from 'next/dynamic';
+
+const PDFViewer = dynamic<{ url: string }>(
+  () => import('./PDFViewer').then((mod) => mod.default),
+  {
+    ssr: false,
+  },
+);
 
 interface Resource {
   url: string;
   markdown: string;
+  fileType?: string;
 }
 
-const ResourceViewer: React.FC = () => {
+export default function ResourceViewer() {
   const { currentResourceMeta } = useCurrentResource();
   const [viewMode, setViewMode] = useState<'URL' | 'Text'>('URL');
-  const [csvData, setCsvData] = useState<string[][] | null>(null);
+  const [csvData, setCsvData] = useState<string[][]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const [resource, setResource] = useState<Resource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,18 +66,21 @@ const ResourceViewer: React.FC = () => {
   }, [fetchResource]);
 
   useEffect(() => {
-    if (resource?.url?.toLowerCase()?.endsWith('.csv')) {
+    if (resource?.url && currentResourceMeta?.fileType === 'csv') {
       fetch(resource.url)
         .then((response) => response.text())
         .then((text) => {
           const rows = text.trim().split('\n');
           setCsvData(rows.map((row) => row.split(',')));
         })
-        .catch((error) => console.error('Error loading CSV file:', error));
+        .catch((error) => {
+          console.error('Error loading CSV file:', error);
+          setCsvData([]);
+        });
     } else {
-      setCsvData(null);
+      setCsvData([]);
     }
-  }, [resource]);
+  }, [resource?.url, currentResourceMeta?.fileType]);
 
   if (isLoading) {
     return (
@@ -79,13 +90,36 @@ const ResourceViewer: React.FC = () => {
     );
   }
 
-  if (!resource) {
+  if (!resource || !currentResourceMeta) {
     return (
       <div className='flex h-full w-full items-center justify-center'>
         <p className='text-white'>Resource not found.</p>
       </div>
     );
   }
+
+  const renderCsvData = (data: string[][]) => {
+    return (
+      <div data-testid='csv-viewer' className='h-full overflow-auto'>
+        <table className='w-full border-collapse'>
+          <tbody>
+            {data.map((row, rowIndex) => (
+              <tr key={`row-${rowIndex}-${row.join('-')}`}>
+                {row.map((cell, colIndex) => (
+                  <td
+                    key={`cell-${rowIndex}-${colIndex}-${cell}`}
+                    className='border border-gray-600 p-2 text-white'
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   const renderContent = () => {
     if (viewMode === 'Text' && resource.markdown) {
@@ -98,61 +132,15 @@ const ResourceViewer: React.FC = () => {
       );
     }
 
-    const fileType = currentResourceMeta?.fileType?.toLowerCase();
-    if (fileType?.includes('pdf')) {
-      return (
-        <iframe
-          data-testid='pdf-viewer'
-          src={resource?.url || ''}
-          className='h-full w-full'
-          title='PDF Viewer'
-        />
-      );
+    if (currentResourceMeta.fileType === 'csv' && csvData.length > 0) {
+      return renderCsvData(csvData);
     }
 
-    if (fileType?.includes('image')) {
-      return (
-        <div className='flex h-full w-full items-center justify-center'>
-          <Image
-            data-testid='image-viewer'
-            src={resource.url}
-            alt={currentResourceMeta?.name || 'Resource image'}
-            width={800}
-            height={600}
-            className='max-h-full max-w-full object-contain'
-          />
-        </div>
-      );
+    if (currentResourceMeta.fileType === 'pdf') {
+      return <PDFViewer url={resource.url} />;
     }
 
-    if (csvData) {
-      return (
-        <div data-testid='csv-viewer' className='h-full overflow-auto'>
-          <table className='w-full border-collapse'>
-            <tbody>
-              {csvData.map((row, i) => (
-                <tr key={i}>
-                  {row.map((cell, j) => (
-                    <td
-                      key={j}
-                      className='border border-gray-600 p-2 text-white'
-                    >
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-
-    return (
-      <div className='flex h-full w-full items-center justify-center'>
-        <p className='text-white'>Unsupported file type</p>
-      </div>
-    );
+    return <div>Unsupported file type</div>;
   };
 
   return (
@@ -161,7 +149,7 @@ const ResourceViewer: React.FC = () => {
         <div className='flex w-full items-center'>
           <div className='flex h-full w-full flex-col px-2 py-2'>
             <div className='mb-2 text-lg font-bold text-white'>
-              {currentResourceMeta?.name
+              {currentResourceMeta.name
                 ? currentResourceMeta.name.length > 20
                   ? `${currentResourceMeta.name.slice(0, 20)}...`
                   : currentResourceMeta.name
@@ -187,7 +175,7 @@ const ResourceViewer: React.FC = () => {
           data-testid='resource-notes'
           className='w-full rounded bg-gray-800 p-2 text-white'
           placeholder='Add notes...'
-          value={currentResourceMeta?.notes || ''}
+          value={currentResourceMeta.notes || ''}
           onChange={() => setShowEditor(true)}
         />
       </div>
@@ -199,6 +187,4 @@ const ResourceViewer: React.FC = () => {
       )}
     </div>
   );
-};
-
-export default ResourceViewer;
+}

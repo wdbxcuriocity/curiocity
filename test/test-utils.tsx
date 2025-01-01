@@ -1,7 +1,9 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import { CurrentDocumentProvider } from '@/context/AppContext';
-import { ResourceProvider } from '@/context/ResourceContext';
+import {
+  CurrentDocumentProvider,
+  CurrentResourceProvider,
+} from '@/context/AppContext';
 
 const mockFetchDocuments = jest.fn().mockResolvedValue([]);
 const mockFetchDocument = jest.fn().mockResolvedValue({});
@@ -9,33 +11,34 @@ const mockUploadResource = jest.fn().mockResolvedValue({});
 const mockFetchResourceMeta = jest.fn().mockResolvedValue({});
 
 export const mockContextValue = {
-  documents: [],
+  allDocuments: [],
   currentDocument: null,
   setCurrentDocument: jest.fn(),
   fetchDocuments: mockFetchDocuments,
   fetchDocument: mockFetchDocument,
   createDocument: jest.fn(),
-  updateDocument: jest.fn(),
-  deleteDocument: jest.fn(),
+  viewingDocument: false,
+  setViewingDocument: jest.fn(),
 };
 
 export const mockResourceContextValue = {
-  resources: [],
   currentResource: null,
   setCurrentResource: jest.fn(),
+  currentResourceMeta: null,
+  setCurrentResourceMeta: jest.fn(),
   uploadResource: mockUploadResource,
   fetchResourceMeta: mockFetchResourceMeta,
-  deleteResource: jest.fn(),
+  fetchResourceAndMeta: jest.fn(),
+  extractText: jest.fn(),
+  moveResource: jest.fn(),
 };
 
 export const TestWrapper: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   return (
-    <CurrentDocumentProvider value={mockContextValue}>
-      <ResourceProvider value={mockResourceContextValue}>
-        {children}
-      </ResourceProvider>
+    <CurrentDocumentProvider>
+      <CurrentResourceProvider>{children}</CurrentResourceProvider>
     </CurrentDocumentProvider>
   );
 };

@@ -19,7 +19,12 @@ const config = {
     cpus: 1,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    // Enforce ESLint during builds and development
+    ignoreDuringBuilds: false,
+    // Strict mode to catch all errors and warnings
+    dirs: ['pages', 'components', 'lib', 'app', 'context', 'utils'],
+    // Use our .eslintrc.json configuration
+    useEslintrc: true
   },
   typescript: {
     ignoreBuildErrors: true,

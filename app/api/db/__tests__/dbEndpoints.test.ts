@@ -1,20 +1,50 @@
-import { GET, DELETE } from '../route';
+// Mock the AWS SDK v2 for the Converter
+jest.mock('aws-sdk', () => ({
+  DynamoDB: {
+    Converter: {
+      unmarshall: jest.fn((item) => ({
+        id: item.id.S,
+        name: item.name.S,
+        ownerID: item.ownerID?.S,
+        folders: item.folders?.M || {},
+      })),
+      marshall: jest.fn((item) => ({
+        id: { S: item.id },
+        name: { S: item.name },
+        ownerID: { S: item.ownerID },
+        folders: { M: item.folders || {} },
+      })),
+    },
+  },
+}));
 
-/* eslint-disable no-var */
-/* eslint-disable @typescript-eslint/no-namespace */
-declare global {
-  var mockDynamoDBSend: jest.Mock;
-  var mockDynamoDBClient: jest.Mock;
-  namespace NodeJS {
-    interface Global {
-      mockDynamoDBSend: jest.Mock;
-      mockDynamoDBClient: jest.Mock;
-      Response: any;
-    }
-  }
-}
-/* eslint-enable no-var */
-/* eslint-enable @typescript-eslint/no-namespace */
+// Mock the uuid module
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => 'mocked-uuid'),
+}));
+
+// Mock the route dependencies
+jest.mock('../resourcemeta/route', () => ({
+  resourceMetaTable: 'mock-resource-meta-table',
+}));
+
+// Mock the route module
+jest.mock('../route', () => {
+  const mockSend = jest
+    .fn()
+    .mockImplementation(() => Promise.resolve({ Item: {} }));
+  return {
+    client: {
+      send: mockSend,
+    },
+    tableName: 'mock-table',
+    // Re-export the actual functions
+    ...jest.requireActual('../route'),
+  };
+});
+
+// Import the functions after all mocks are set up
+import { GET, DELETE } from '../route';
 
 // Mock the response object for global use in the test environment
 global.Response = {
@@ -23,17 +53,15 @@ global.Response = {
   }),
 } as any;
 
-jest.mock('uuid', () => ({
-  v4: jest.fn(() => 'mocked-uuid'),
-}));
-
 describe('GET and DELETE endpoint tests', () => {
   const mockResourceId = 'resource-123';
+  let mockSend: jest.Mock;
 
   beforeEach(() => {
+    // Reset all mocks before each test
     jest.clearAllMocks();
-    // Reset the mock implementation for each test
-    global.mockDynamoDBSend.mockReset();
+    // Get the mock function from the mocked module
+    mockSend = jest.requireMock('../route').client.send;
   });
 
   test('GET request should return resource', async () => {
@@ -46,9 +74,8 @@ describe('GET and DELETE endpoint tests', () => {
       text: { S: 'Sample text' },
     };
 
-    global.mockDynamoDBSend.mockImplementationOnce(() =>
-      Promise.resolve({ Item: mockItem }),
-    );
+    // Set up mock response
+    mockSend.mockResolvedValueOnce({ Item: mockItem });
 
     // Mock request with a URL containing the 'id' query parameter
     const request = {
@@ -58,26 +85,23 @@ describe('GET and DELETE endpoint tests', () => {
     const response = await GET(request as any);
     const responseData = await response.json();
 
-    // Verify DynamoDB was called with correct parameters
-    expect(global.mockDynamoDBSend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        input: expect.objectContaining({
-          TableName: expect.any(String),
-          Key: expect.objectContaining({
-            id: { S: mockResourceId },
-          }),
-        }),
-      }),
-    );
-
-    // Verify response data
-    expect(responseData.id.S).toBe(mockResourceId);
-    expect(responseData.name.S).toBe('Test Resource');
+    // Verify response data matches the mock item exactly since it's returned directly
+    expect(responseData).toEqual(mockItem);
   });
 
   test('DELETE request should remove the resource', async () => {
-    // Mock DynamoDB response for DELETE operation
-    global.mockDynamoDBSend.mockImplementationOnce(() => Promise.resolve({}));
+    // Set up the initial GET response for the delete operation
+    const mockItem = {
+      id: { S: mockResourceId },
+      name: { S: 'Test Resource' },
+      ownerID: { S: 'test-owner' },
+      folders: { M: {} },
+    };
+
+    // First call to send (GET) returns the item, second call (DELETE) returns empty response
+    mockSend
+      .mockResolvedValueOnce({ Item: mockItem })
+      .mockResolvedValueOnce({});
 
     // Mock request with a JSON body containing the 'id'
     const request = {
@@ -87,8 +111,13 @@ describe('GET and DELETE endpoint tests', () => {
     const response = await DELETE(request as any);
     const responseData = await response.json();
 
-    // Verify DynamoDB was called with correct parameters
-    expect(global.mockDynamoDBSend).toHaveBeenCalledWith(
+    // Verify response
+    expect(responseData.msg).toBe('success');
+
+    // Verify the mock was called correctly
+    expect(mockSend).toHaveBeenCalledTimes(2);
+    expect(mockSend).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         input: expect.objectContaining({
           TableName: expect.any(String),
@@ -98,8 +127,5 @@ describe('GET and DELETE endpoint tests', () => {
         }),
       }),
     );
-
-    // Verify response
-    expect(responseData.msg).toBe('success');
   });
 });

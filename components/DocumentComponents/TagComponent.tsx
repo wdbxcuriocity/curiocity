@@ -34,8 +34,23 @@ export default function TagComponent({
     setNewTagValue('');
   };
 
-  return newTag ? (
-    isAdding ? (
+  if (!newTag) {
+    return (
+      <div className='flex items-center justify-center space-x-2 rounded-full border-[1px] border-zinc-700 py-1 pl-2 pr-3 text-sm font-medium text-gray-200'>
+        <button
+          onClick={onDelete}
+          className='flex h-4 w-4 items-center justify-center rounded-full text-xs text-zinc-300 hover:bg-red-600 focus:outline-none'
+          aria-label={`Delete ${label}`}
+        >
+          ✕
+        </button>
+        <span>{label}</span>
+      </div>
+    );
+  }
+
+  if (isAdding) {
+    return (
       <div className='flex items-center space-x-2'>
         <input
           type='text'
@@ -59,25 +74,16 @@ export default function TagComponent({
           ✕
         </button>
       </div>
-    ) : (
-      <div
-        className='flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-[1px] border-zinc-700 text-sm text-white hover:bg-blue-600'
-        onClick={() => setIsAdding(true)}
-        aria-label='Add new tag'
-      >
-        +
-      </div>
-    )
-  ) : (
-    <div className='flex items-center justify-center space-x-2 rounded-full border-[1px] border-zinc-700 py-1 pl-2 pr-3 text-sm font-medium text-gray-200'>
-      <button
-        onClick={onDelete}
-        className='flex h-4 w-4 items-center justify-center rounded-full text-xs text-zinc-300 hover:bg-red-600 focus:outline-none'
-        aria-label={`Delete ${label}`}
-      >
-        ✕
-      </button>
-      <span>{label}</span>
-    </div>
+    );
+  }
+
+  return (
+    <button
+      className='flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-[1px] border-zinc-700 text-sm text-white hover:bg-blue-600 focus:outline-none'
+      onClick={() => setIsAdding(true)}
+      aria-label='Add new tag'
+    >
+      +
+    </button>
   );
 }

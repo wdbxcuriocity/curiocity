@@ -39,4 +39,5 @@ export interface ResourceMeta {
   tags: Array<string>;
   documentId: string;
   fileType: string;
+  folders: Record<string, FolderData>;
 }

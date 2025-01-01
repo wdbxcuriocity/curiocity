@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+out/
+build/
+
+# Test files
+coverage/
+**/__mocks__/**
+test/__mocks__/
+jest.setup.js
+jest.config.js
+
+# Cache
+.eslintcache 

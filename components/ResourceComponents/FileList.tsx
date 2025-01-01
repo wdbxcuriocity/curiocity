@@ -5,7 +5,7 @@ import { DndContext } from '@dnd-kit/core';
 import TableFolder from '@/components/ResourceComponents/TableFolder';
 import TextInput from '../GeneralComponents/TextInput';
 import Divider from '../GeneralComponents/Divider';
-import { FaCheck, FaFilter } from 'react-icons/fa';
+import { FaFilter } from 'react-icons/fa';
 import { useCurrentDocument } from '@/context/AppContext';
 import { FolderData } from '@/types/types';
 
@@ -119,8 +119,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
         <h3 className='mb-4 text-lg font-semibold'>Filter Options</h3>
         <Divider />
         <div className='mb-4'>
-          <label className='mb-2 block text-sm'>Sort Order</label>
+          <label htmlFor='sort-order' className='mb-2 block text-sm'>
+            Sort Order
+          </label>
           <select
+            id='sort-order'
             className='w-full rounded-md bg-gray-700 px-2 py-1'
             value={selectedSortOrder}
             onChange={(e) => setSelectedSortOrder(e.target.value)}
@@ -133,17 +136,14 @@ const FilterModal: React.FC<FilterModalProps> = ({
         </div>
         <Divider />
         <div className='mb-4'>
-          <label className='mb-2 block text-sm'>File Types</label>
-          <div className='flex flex-wrap gap-2'>
-            {availableFileTypes.map((fileType) => (
-              <label
-                key={fileType}
-                className='flex cursor-pointer items-center gap-2'
-              >
-                <div className='relative'>
+          <fieldset>
+            <legend className='mb-2 block text-sm'>File Types</legend>
+            <div className='flex flex-wrap gap-2'>
+              {availableFileTypes.map((fileType) => (
+                <div key={fileType} className='flex items-center'>
                   <input
                     type='checkbox'
-                    value={fileType}
+                    id={`filetype-${fileType}`}
                     checked={selectedFileTypes.includes(fileType)}
                     onChange={(e) => {
                       if (e.target.checked) {
@@ -154,52 +154,57 @@ const FilterModal: React.FC<FilterModalProps> = ({
                         );
                       }
                     }}
-                    className='absolute h-0 w-0 opacity-0'
+                    className='mr-2'
                   />
-                  <div
-                    className={`h-5 w-5 rounded-md border-2 ${
-                      selectedFileTypes.includes(fileType)
-                        ? 'border-gray-500 bg-gray-500'
-                        : 'border-[1px] border-gray-500 bg-gray-700'
-                    } flex items-center justify-center`}
-                  >
-                    {selectedFileTypes.includes(fileType) && (
-                      <FaCheck className='text-sm text-white' />
-                    )}
-                  </div>
+                  <label htmlFor={`filetype-${fileType}`} className='text-sm'>
+                    {fileType}
+                  </label>
                 </div>
-                <span className='text-sm text-white'>{fileType}</span>
-              </label>
-            ))}
-          </div>
+              ))}
+            </div>
+          </fieldset>
         </div>
         <Divider />
         <div className='mb-4'>
-          <label className='mb-2 block text-sm'>Date Range</label>
-          <div className='flex gap-2'>
-            <input
-              type='date'
-              className='w-full rounded-md bg-gray-700 px-2 py-1'
-              value={selectedDateRange.from}
-              onChange={(e) =>
-                setSelectedDateRange({
-                  ...selectedDateRange,
-                  from: e.target.value,
-                })
-              }
-            />
-            <input
-              type='date'
-              className='w-full rounded-md bg-gray-700 px-2 py-1'
-              value={selectedDateRange.to}
-              onChange={(e) =>
-                setSelectedDateRange({
-                  ...selectedDateRange,
-                  to: e.target.value,
-                })
-              }
-            />
-          </div>
+          <fieldset>
+            <legend className='mb-2 block text-sm'>Date Range</legend>
+            <div className='flex gap-2'>
+              <div className='flex-1'>
+                <label htmlFor='date-from' className='mb-1 block text-xs'>
+                  From
+                </label>
+                <input
+                  id='date-from'
+                  type='date'
+                  className='w-full rounded-md bg-gray-700 px-2 py-1'
+                  value={selectedDateRange.from}
+                  onChange={(e) =>
+                    setSelectedDateRange({
+                      ...selectedDateRange,
+                      from: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className='flex-1'>
+                <label htmlFor='date-to' className='mb-1 block text-xs'>
+                  To
+                </label>
+                <input
+                  id='date-to'
+                  type='date'
+                  className='w-full rounded-md bg-gray-700 px-2 py-1'
+                  value={selectedDateRange.to}
+                  onChange={(e) =>
+                    setSelectedDateRange({
+                      ...selectedDateRange,
+                      to: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </fieldset>
         </div>
         <Divider />
         <div className='flex justify-between'>

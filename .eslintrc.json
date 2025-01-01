@@ -1,12 +1,37 @@
 {
   "extends": ["next/core-web-vitals", "next/typescript"],
-  "rules": { "@typescript-eslint/no-explicit-any": "off" },
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": "error",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "error"
+  },
   "overrides": [
+    {
+      "files": ["*.js", "*.jsx", "*.ts", "*.tsx"],
+      "parserOptions": {
+        "project": "./tsconfig.json"
+      }
+    },
     {
       "files": ["jest.setup.js", "jest.config.js"],
       "rules": {
         "@typescript-eslint/no-require-imports": "off"
+      },
+      "parserOptions": {
+        "project": null
       }
     }
-  ]
+  ],
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "out/",
+    "coverage/",
+    "test/__mocks__/",
+    "**/__mocks__/**",
+    "jest.setup.js",
+    "jest.config.js"
+  ],
+  "reportUnusedDisableDirectives": true
 }

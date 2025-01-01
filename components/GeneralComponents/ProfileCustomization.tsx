@@ -1,32 +1,22 @@
 'use client';
 
-import React from 'react';
-import { useState, useEffect, ChangeEvent } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { Cross2Icon } from '@radix-ui/react-icons';
-import { Button } from '@/components/ui/button';
-import Image from 'next/image';
-import {
-  Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-} from '@/components/ui/form';
 import { useForm, SubmitHandler, FieldValues } from 'react-hook-form';
-import ResetPasswordButton from './ResetPasswordButton';
+import Image from 'next/image';
 
 interface ChangeUserFormValues extends FieldValues {
   username: string;
   email: string;
 }
 
+interface ProfileCustomizationProps {
+  readonly onProfileUpdate: () => Promise<void>;
+}
+
 export default function ProfileCustomization({
   onProfileUpdate,
-}: {
-  onProfileUpdate: () => void;
-}) {
+}: ProfileCustomizationProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { data: session, update: updateSession } = useSession();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -34,8 +24,8 @@ export default function ProfileCustomization({
 
   const formMethods = useForm<ChangeUserFormValues>({
     defaultValues: {
-      username: session?.user?.name || '',
-      email: session?.user?.email || '',
+      username: session?.user?.name ?? '',
+      email: session?.user?.email ?? '',
     },
   });
 
@@ -45,17 +35,17 @@ export default function ProfileCustomization({
 
   const handleCloseModal = () => {
     formMethods.reset({
-      username: session?.user?.name || '',
-      email: session?.user?.email || '',
+      username: session?.user?.name ?? '',
+      email: session?.user?.email ?? '',
     });
-    setPreviewImage(session?.user?.image || null);
+    setPreviewImage(session?.user?.image ?? null);
     setSelectedFile(null);
     setIsModalOpen(false);
   };
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
       setSelectedFile(file);
       setPreviewImage(URL.createObjectURL(file));
     }
@@ -68,7 +58,7 @@ export default function ProfileCustomization({
       if (selectedFile) {
         const formData = new FormData();
         formData.append('file', selectedFile);
-        formData.append('userId', session?.user?.id || '');
+        formData.append('userId', session?.user?.id ?? '');
 
         const response = await fetch('/api/user/upload-photo', {
           method: 'POST',
@@ -87,7 +77,7 @@ export default function ProfileCustomization({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: session?.user.id,
+          id: session?.user?.id,
           name: data.username,
           image: imageUrl,
         }),
@@ -96,10 +86,9 @@ export default function ProfileCustomization({
       if (!profileResponse.ok) {
         throw new Error('Failed to update profile');
       }
-      await updateSession();
 
       await updateSession();
-      onProfileUpdate();
+      await onProfileUpdate();
       handleCloseModal();
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -109,150 +98,86 @@ export default function ProfileCustomization({
   useEffect(() => {
     if (session?.user) {
       formMethods.reset({
-        username: session.user.name || '',
-        email: session.user.email || '',
+        username: session.user.name ?? '',
+        email: session.user.email ?? '',
       });
-      setPreviewImage(session.user.image || null);
+      setPreviewImage(session.user.image ?? null);
     }
   }, [session, formMethods]);
 
   return (
-    <div className='grid h-10 w-10 place-items-center rounded-lg border-2 border-fileBlue transition-colors duration-200 hover:bg-gray-700'>
-      <div
+    <>
+      <button
+        className='focus:ring-primary grid h-10 w-10 place-items-center rounded-lg border-2 border-fileBlue transition-colors duration-200 hover:bg-gray-700 focus:outline-none focus:ring-2'
         onClick={handleOpenModal}
-        className='grid h-full w-full cursor-pointer place-items-center'
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleOpenModal();
+          }
+        }}
+        aria-label='Open profile customization'
       >
-        {session && session.user && (
-          <div className='flex items-center space-x-2'>
-            {session.user.image && (
-              <div className='relative h-6 w-6'>
-                <Image
-                  src={session.user.image}
-                  alt='User Avatar'
-                  layout='fill'
-                  className='rounded-full'
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        {session?.user ? (
+          <Image
+            src={session.user.image ?? '/default-avatar.png'}
+            alt='Profile'
+            width={24}
+            height={24}
+            className='rounded-full'
+          />
+        ) : null}
+      </button>
 
       {isModalOpen && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75'>
-          <div className='flex h-[48rem] w-[32rem] flex-col rounded-xl border-[1px] border-zinc-700 bg-bgSecondary p-6'>
-            <div className='w-fill mb-6 flex justify-between'>
-              <h1 className='text-3xl font-bold text-textPrimary'>
-                Profile Settings
-              </h1>
-              <div
-                onClick={handleCloseModal}
-                className='grid cursor-pointer place-items-center'
-              >
-                <Cross2Icon className='h-6 w-6 rounded-lg text-textPrimary transition-colors duration-200 hover:bg-gray-700' />
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50'>
+          <div className='w-96 rounded-lg bg-white p-6 shadow-lg'>
+            <form
+              onSubmit={formMethods.handleSubmit(onSubmit)}
+              className='space-y-4'
+            >
+              <div>
+                <label
+                  htmlFor='profileImage'
+                  className='block text-sm font-medium text-gray-700'
+                >
+                  Profile Image
+                </label>
+                <input
+                  type='file'
+                  id='profileImage'
+                  accept='image/*'
+                  onChange={handleFileChange}
+                  className='focus:border-primary focus:ring-primary mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-1'
+                />
+                {previewImage && (
+                  <Image
+                    src={previewImage}
+                    alt='Preview'
+                    width={80}
+                    height={80}
+                    className='mt-2 rounded-full object-cover'
+                  />
+                )}
               </div>
-            </div>
-
-            <h5 className='text-textPrimary'>Profile Picture</h5>
-            <div className='my-4 grid w-full place-items-center'>
-              {previewImage ? (
-                <Image
-                  src={previewImage}
-                  alt={`${session?.user?.name}'s profile picture`}
-                  width={128}
-                  height={128}
-                  className='h-32 w-32 rounded-full text-center text-textPrimary'
-                />
-              ) : (
-                <p className='text-textPrimary'>No user image available</p>
-              )}
-            </div>
-
-            <input
-              type='file'
-              accept='image/*'
-              style={{ display: 'none' }}
-              id='photo-upload'
-              onChange={handleFileChange}
-            />
-            <Button
-              onClick={() => document.getElementById('photo-upload')?.click()}
-              className='bg-gray-800 transition-colors duration-200 hover:bg-gray-700'
-            >
-              Change Photo
-            </Button>
-
-            <Form
-              {...formMethods}
-              key={session ? session.user.email : 'default'}
-            >
-              <form
-                onSubmit={formMethods.handleSubmit(onSubmit)}
-                className='mt-6 space-y-6'
-              >
-                <FormField
-                  name='username'
-                  control={formMethods.control}
-                  rules={{ required: 'Username is required' }}
-                  render={({ field }) => (
-                    <FormItem className='space-y-2'>
-                      <FormLabel className='text-textPrimary'>
-                        Username
-                      </FormLabel>
-                      <FormControl>
-                        <input
-                          {...field}
-                          type='text'
-                          placeholder='Enter new username'
-                          className='w-full rounded-md border border-textPrimary bg-bgSecondary px-4 py-2 text-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500'
-                        />
-                      </FormControl>
-                      <FormMessage className='text-sm font-medium text-red-500' />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  name='email'
-                  control={formMethods.control}
-                  rules={{
-                    required: 'Email is required',
-                    pattern: {
-                      value: /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/,
-                      message: 'Enter a valid email address',
-                    },
-                  }}
-                  render={({}) => (
-                    <FormItem className='space-y-2'>
-                      <FormLabel className='text-textPrimary'>Email</FormLabel>
-                      <FormControl>
-                        <input
-                          type='email'
-                          placeholder='Feature Coming Soon'
-                          disabled
-                          className='w-full rounded-md border border-red-500 bg-bgSecondary px-4 py-2 text-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500'
-                        />
-                      </FormControl>
-                      <FormMessage className='text-sm font-medium text-red-500' />
-                    </FormItem>
-                  )}
-                />
-
+              <div className='flex justify-end space-x-2'>
+                <button
+                  type='button'
+                  onClick={handleCloseModal}
+                  className='rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50'
+                >
+                  Cancel
+                </button>
                 <button
                   type='submit'
-                  className='w-full rounded-md bg-gray-800 py-2 font-semibold text-white duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+                  className='bg-primary hover:bg-primary-dark rounded-md px-4 py-2 text-sm font-medium text-white'
                 >
-                  Update Profile
+                  Save
                 </button>
-              </form>
-            </Form>
-
-            <div className='mt-8'>
-              <ResetPasswordButton />
-            </div>
+              </div>
+            </form>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
