@@ -2,9 +2,18 @@
 
 ## Tech Stack
 
-- **Next.js**
+- **Next.js 14**
 - **TypeScript**
 - **AWS**: DynamoDB + S3
+- **Tailwind CSS**
+- **PostHog Analytics**
+
+## Prerequisites
+
+- Node.js >= 18.x
+- Yarn package manager
+- AWS credentials configured
+- PostHog account (for analytics)
 
 ## Key Features
 
@@ -14,51 +23,65 @@
 - Resource Parsing
 - Authentication
 
-## Running the Development Server
+## Development Setup
+
+1. Clone the repository:
 
 ```bash
 git clone https://github.com/wdbxcuriocity/curiocity.git
-npm install
-npm run dev
 ```
 
-## Pushing to Production
-
-### Notes on `next.config.js`
-
-- Auto-push to Vercel is currently disabled.
-- ESLint and TypeScript checks are ignored during builds:
-  ```javascript
-  eslint: {
-    ignoreDuringBuilds: true, // Ignore ESLint during builds
-  },
-  typescript: {
-    ignoreBuildErrors: true, // Ignore TypeScript errors during builds
-  },
-  ```
-
-### Deploying Manually
-
-Use the following command to push to Vercel:
+2. Install dependencies:
 
 ```bash
-vercel --prod --force
+yarn install
 ```
+
+3. Set up environment variables:
+
+- Copy `.env.example` to `.env`
+- Update the following variables:
+  - `NEXTAUTH_URL`: Use `http://localhost:4000` for development
+  - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+  - `POSTHOG_KEY`
+
+4. Start the development server:
+
+```bash
+yarn dev
+```
+
+The app will be available at http://localhost:4000
+
+## Testing
+
+Run the test suite:
+
+```bash
+yarn test
+```
+
+Tests are written using Jest and React Testing Library. Test files are located in:
+
+- `components/__tests__/` - Component tests
+- `app/api/db/__tests__/` - API endpoint tests
 
 ## File Structure
 
 ```
 App
 ├── Api
-│   ├── auth
+│   ├── analytics      # PostHog analytics endpoints
+│   ├── auth          # Authentication endpoints
 │   ├── db
 │   │   ├── documents
 │   │   ├── resource
 │   │   ├── resourcemeta
-│   │   ├── (others, need to be reorganized)
 │   ├── resource_parsing
+│   ├── s3-upload     # S3 file upload handlers
 │   ├── manual-signup
 │   ├── reset-password
+│   └── user          # User management endpoints
 ├── Login
 ├── Report-home
 ├── Signup
@@ -70,44 +93,68 @@ App
 │   ├── PostHogComponent
 │   └── ResourceComponents
 ├── Context
-│   ├── AppContext (Resources and Documents)
+│   ├── AppContext    # Resources and Documents
 │   ├── AuthContext
 │   └── SwitchContext
+├── lib              # Utility functions and shared logic
+├── types           # TypeScript type definitions
+└── test            # Test utilities and mocks
 ```
 
-## Environment Variables
+## Configuration Files
 
-- Update `.env` when pushing to production:
-  - Change `NEXTAUTH_URL` from `localhost:4000` to the Vercel deployment URL.
+- `next.config.mjs` - Next.js configuration
+- `tailwind.config.ts` - Tailwind CSS configuration
+- `.prettierrc` - Code formatting rules
+- `.eslintrc.json` - Linting rules
+- `jest.config.js` - Test configuration
+- `tsconfig.json` - TypeScript configuration
 
-## Parsing
+## Production Deployment
 
-- Parsing is currently disabled.
-  - Change `DISABLE_PARSING` to `false` to enable it.
-- Known Issues:
-  - Some files are skipped during parsing or parsed unnecessarily.
+### Notes on `next.config.mjs`
 
-## Bugs Identified
+- Auto-push to Vercel is currently disabled
+- ESLint and TypeScript checks are ignored during builds:
+  ```javascript
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  ```
 
-1. Files occasionally fail to upload to the database, Error Code 413.
+### Deploying Manually
 
-- Bug most likely occurs in UploadAllFiles function in S3Button.tsx
+Use the following command to push to Vercel:
 
-2. Parsing bug (see above).
-3. TypeScript rules are not fully enforced.
-4. ESLint rules are not fully enforced.
+```bash
+vercel --prod --force
+```
 
-## Minor Issues
+## Known Issues
 
-1. Imports are not standarized using root (@/..)
+1. Files occasionally fail to upload to the database (Error 413)
 
-## Not Implemented
+   - Bug likely in UploadAllFiles function in S3Button.tsx
 
-- Screen resizing for devices smaller than a laptop.
+2. Parsing is currently disabled
 
-## Feature Recommendations
+   - Set `DISABLE_PARSING=false` to enable
+   - Some files are skipped or parsed unnecessarily
 
-- Create /utils to move all api calls
+3. TypeScript and ESLint rules not fully enforced
+
+4. No responsive design for mobile devices
+
+## Development Guidelines
+
+1. Use absolute imports with `@/` prefix
+2. Run tests before submitting PRs
+3. Format code using Prettier
+4. Follow the existing component structure
+5. Update tests when modifying components
 
 ## Contact Information
 
