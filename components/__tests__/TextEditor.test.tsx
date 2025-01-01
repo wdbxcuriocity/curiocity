@@ -1,37 +1,45 @@
 // src/components/__tests__/TextEditor.test.tsx
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react';
+import { render, fireEvent, waitFor, screen } from '@testing-library/react';
 import TextEditor from '../DocumentComponents/TextEditor';
 import '@testing-library/jest-dom';
+import { Document, ResourceMeta } from '@/types/types';
 
-// Mock the Button component to prevent testing it
-jest.mock('../Button', () => {
-  const MockButton = (props: any) => (
-    <button onClick={props.onClick}>{props.label}</button>
-  );
-  MockButton.displayName = 'MockButton'; // Assign displayName
-  return MockButton;
-});
-
-// Mock ReactQuill component to simplify testing
-jest.mock('react-quill', () => {
+// Mock next/dynamic to return the mock component directly
+jest.mock('next/dynamic', () => () => {
   const MockReactQuill = (props: any) => (
-    <textarea
-      data-testid='react-quill'
-      value={props.value}
-      onChange={(e) => props.onChange(e.target.value)}
-    />
+    <div data-testid='react-quill-wrapper'>
+      <textarea
+        data-testid='react-quill'
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value)}
+      />
+    </div>
   );
-  MockReactQuill.displayName = 'MockReactQuill'; // Assign displayName
+  MockReactQuill.displayName = 'MockReactQuill';
   return MockReactQuill;
 });
 
+// Mock the useCurrentDocument hook
+jest.mock('@/context/AppContext', () => ({
+  ...jest.requireActual('@/context/AppContext'),
+  useCurrentDocument: () => ({
+    allDocuments: [],
+    currentDocument: null,
+    setCurrentDocument: jest.fn(),
+    fetchDocuments: jest.fn(),
+    fetchDocument: jest.fn(),
+    createDocument: jest.fn(),
+    viewingDocument: false,
+    setViewingDocument: jest.fn(),
+  }),
+}));
+
 describe('TextEditor Component', () => {
-  const mockSwapState = jest.fn();
+  const mockCallback = jest.fn();
 
   beforeEach(() => {
-    // Mock the global fetch API
     global.fetch = jest.fn(() =>
       Promise.resolve({
         json: () => Promise.resolve({ message: 'Success' }),
@@ -43,168 +51,147 @@ describe('TextEditor Component', () => {
     jest.clearAllMocks();
   });
 
-  it('renders correctly with default props', () => {
-    const { getByPlaceholderText, getByTestId } = render(
-      <TextEditor swapState={mockSwapState} />,
-    );
-
-    expect(getByPlaceholderText('Enter document title')).toBeInTheDocument();
-    expect(getByTestId('react-quill')).toBeInTheDocument();
-  });
-
-  it('renders correctly with a provided document', () => {
-    const mockDocument = {
+  it('renders correctly in full mode', async () => {
+    const mockDocument: Document = {
       id: '1',
-      name: 'Sample Document',
-      text: 'Sample content',
-      files: [],
+      name: 'Test Document',
+      text: 'Test content',
+      folders: {},
+      dateAdded: new Date().toISOString(),
+      lastOpened: new Date().toISOString(),
+      tags: [],
+      ownerID: 'test-owner',
     };
 
-    const { getByDisplayValue, getByTestId } = render(
-      <TextEditor document={mockDocument} swapState={mockSwapState} />,
+    render(
+      <TextEditor
+        mode='full'
+        source={mockDocument}
+        generalCallback={mockCallback}
+      />,
     );
 
-    expect(getByDisplayValue('Sample Document')).toBeInTheDocument();
-    expect(getByTestId('react-quill')).toHaveValue('Sample content');
+    // Wait for dynamic imports to resolve
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText('Enter document title'),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('react-quill')).toBeInTheDocument();
+    });
   });
 
-  it('updates title state on input change', () => {
-    const { getByPlaceholderText } = render(
-      <TextEditor swapState={mockSwapState} />,
+  it('renders correctly in mini mode', async () => {
+    const mockResourceMeta: ResourceMeta = {
+      id: '1',
+      hash: 'test-hash',
+      name: 'Test Resource',
+      dateAdded: new Date().toISOString(),
+      lastOpened: new Date().toISOString(),
+      notes: 'Test notes',
+      summary: 'Test summary',
+      tags: [],
+      documentId: 'test-doc',
+      fileType: 'pdf',
+    };
+
+    render(<TextEditor mode='mini' source={mockResourceMeta} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('react-quill')).toBeInTheDocument();
+      expect(screen.getByTestId('react-quill')).toHaveValue('Test notes');
+    });
+  });
+
+  it('updates content in full mode', async () => {
+    const mockDocument: Document = {
+      id: '1',
+      name: 'Test Document',
+      text: 'Initial content',
+      folders: {},
+      dateAdded: new Date().toISOString(),
+      lastOpened: new Date().toISOString(),
+      tags: [],
+      ownerID: 'test-owner',
+    };
+
+    render(
+      <TextEditor
+        mode='full'
+        source={mockDocument}
+        generalCallback={mockCallback}
+      />,
     );
 
-    const titleInput = getByPlaceholderText(
-      'Enter document title',
-    ) as HTMLInputElement;
-    fireEvent.change(titleInput, { target: { value: 'New Title' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('react-quill')).toBeInTheDocument();
+    });
 
-    expect(titleInput.value).toBe('New Title');
+    const quillEditor = screen.getByTestId(
+      'react-quill',
+    ) as HTMLTextAreaElement;
+    fireEvent.change(quillEditor, { target: { value: 'Updated content' } });
+
+    expect(quillEditor.value).toBe('Updated content');
   });
 
-  it('updates content state on editor change', () => {
-    const { getByTestId } = render(<TextEditor swapState={mockSwapState} />);
+  it('calls save API in full mode', async () => {
+    const mockDocument: Document = {
+      id: '1',
+      name: 'Test Document',
+      text: 'Test content',
+      folders: {},
+      dateAdded: new Date().toISOString(),
+      lastOpened: new Date().toISOString(),
+      tags: [],
+      ownerID: 'test-owner',
+    };
 
-    const quillEditor = getByTestId('react-quill') as HTMLTextAreaElement;
-    fireEvent.change(quillEditor, { target: { value: 'New Content' } });
-
-    expect(quillEditor.value).toBe('New Content');
-  });
-
-  it('calls handleUpload on "New Save" button click', async () => {
-    const { getByText, getByPlaceholderText, getByTestId } = render(
-      <TextEditor swapState={mockSwapState} />,
+    render(
+      <TextEditor
+        mode='full'
+        source={mockDocument}
+        generalCallback={mockCallback}
+      />,
     );
 
-    const titleInput = getByPlaceholderText(
-      'Enter document title',
-    ) as HTMLInputElement;
-    const quillEditor = getByTestId('react-quill') as HTMLTextAreaElement;
-    const newSaveButton = getByText('New Save');
+    await waitFor(() => {
+      expect(screen.getByText('Save')).toBeInTheDocument();
+    });
 
-    fireEvent.change(titleInput, { target: { value: 'Title' } });
-    fireEvent.change(quillEditor, { target: { value: 'Content' } });
-    fireEvent.click(newSaveButton);
+    fireEvent.click(screen.getByText('Save'));
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/db', expect.any(Object));
     });
-
-    const fetchCallArgs = (global.fetch as jest.Mock).mock.calls[0];
-    const fetchOptions = fetchCallArgs[1];
-    const body = JSON.parse(fetchOptions.body);
-
-    expect(fetchOptions.method).toBe('POST');
-    expect(body.name).toBe('Title');
-    expect(body.text).toBe('Content');
-    expect(body.files).toEqual([]);
   });
 
-  it('calls handleUpdate on "Update Save" button click', async () => {
-    const mockDocument = {
+  it('calls save API in mini mode', async () => {
+    const mockResourceMeta: ResourceMeta = {
       id: '1',
-      name: 'Existing Title',
-      text: 'Existing Content',
-      files: [],
+      hash: 'test-hash',
+      name: 'Test Resource',
+      dateAdded: new Date().toISOString(),
+      lastOpened: new Date().toISOString(),
+      notes: 'Test notes',
+      summary: 'Test summary',
+      tags: [],
+      documentId: 'test-doc',
+      fileType: 'pdf',
     };
 
-    const { getByText, getByDisplayValue, getByTestId } = render(
-      <TextEditor document={mockDocument} swapState={mockSwapState} />,
-    );
-
-    const titleInput = getByDisplayValue('Existing Title') as HTMLInputElement;
-    const quillEditor = getByTestId('react-quill') as HTMLTextAreaElement;
-    const updateSaveButton = getByText('Update Save');
-
-    fireEvent.change(titleInput, { target: { value: 'Updated Title' } });
-    fireEvent.change(quillEditor, { target: { value: 'Updated Content' } });
-    fireEvent.click(updateSaveButton);
+    render(<TextEditor mode='mini' source={mockResourceMeta} />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/db', expect.any(Object));
+      expect(screen.getByText('Save')).toBeInTheDocument();
     });
 
-    const fetchCallArgs = (global.fetch as jest.Mock).mock.calls[0];
-    const fetchOptions = fetchCallArgs[1];
-    const body = JSON.parse(fetchOptions.body);
-
-    expect(fetchOptions.method).toBe('PUT');
-    expect(body.id).toBe('1');
-    expect(body.name).toBe('Updated Title');
-    expect(body.text).toBe('Updated Content');
-    expect(body.files).toEqual([]);
-    expect(mockSwapState).toHaveBeenCalled();
-  });
-
-  it('does not call API if title or content is missing on upload', async () => {
-    const { getByText } = render(<TextEditor swapState={mockSwapState} />);
-
-    const newSaveButton = getByText('New Save');
-    fireEvent.click(newSaveButton);
+    fireEvent.click(screen.getByText('Save'));
 
     await waitFor(() => {
-      expect(global.fetch).not.toHaveBeenCalled();
-    });
-  });
-
-  it('does not call API if title or content is missing on update', async () => {
-    const mockDocument = {
-      id: '1',
-      name: '',
-      text: '',
-      files: [],
-    };
-
-    const { getByText } = render(
-      <TextEditor document={mockDocument} swapState={mockSwapState} />,
-    );
-
-    const updateSaveButton = getByText('Update Save');
-    fireEvent.click(updateSaveButton);
-
-    await waitFor(() => {
-      expect(global.fetch).not.toHaveBeenCalled();
-    });
-  });
-
-  it('shows error if document ID is missing on update', async () => {
-    console.error = jest.fn();
-
-    const mockDocument = {
-      name: 'Title',
-      text: 'Content',
-      files: [],
-    };
-
-    const { getByText } = render(
-      <TextEditor document={mockDocument} swapState={mockSwapState} />,
-    );
-
-    const updateSaveButton = getByText('Update Save');
-    fireEvent.click(updateSaveButton);
-
-    await waitFor(() => {
-      expect(global.fetch).not.toHaveBeenCalled();
-      expect(console.error).toHaveBeenCalledWith('Document ID is missing.');
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/db/resourcemeta/notes',
+        expect.any(Object),
+      );
     });
   });
 });

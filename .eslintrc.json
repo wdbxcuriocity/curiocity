@@ -1,4 +1,12 @@
 {
   "extends": ["next/core-web-vitals", "next/typescript"],
-  "rules": { "@typescript-eslint/no-explicit-any": "off" }
+  "rules": { "@typescript-eslint/no-explicit-any": "off" },
+  "overrides": [
+    {
+      "files": ["jest.setup.js", "jest.config.js"],
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off"
+      }
+    }
+  ]
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { useState, useEffect, ChangeEvent } from 'react';
 import { useSession } from 'next-auth/react';
 import { Cross2Icon } from '@radix-ui/react-icons';

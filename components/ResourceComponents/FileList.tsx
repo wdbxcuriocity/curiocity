@@ -1,27 +1,35 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  DndContext,
-  useSensor,
-  useSensors,
-  PointerSensor,
-} from '@dnd-kit/core';
+import React, { useState, useEffect } from 'react';
+import { DndContext } from '@dnd-kit/core';
 import TableFolder from '@/components/ResourceComponents/TableFolder';
 import TextInput from '../GeneralComponents/TextInput';
 import Divider from '../GeneralComponents/Divider';
-import { FaCheck } from 'react-icons/fa';
+import { FaCheck, FaFilter } from 'react-icons/fa';
 import { useCurrentDocument } from '@/context/AppContext';
+import { FolderData } from '@/types/types';
+
+interface FilterModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedSortOrder: string;
+  setSelectedSortOrder: (value: string) => void;
+  selectedFileTypes: string[];
+  setSelectedFileTypes: (value: string[]) => void;
+  setSelectedDateRange: (value: { from: string; to: string }) => void;
+  availableFileTypes: string[];
+  selectedDateRange: { from: string; to: string };
+}
 
 const filterResources = (
-  folders,
-  fileTypes,
-  dateRange,
-  sortOrder,
-  searchQuery,
-) => {
+  folders: Record<string, FolderData>,
+  fileTypes: string[],
+  dateRange: { from: string; to: string },
+  sortOrder: string,
+  searchQuery: string,
+): Record<string, FolderData> => {
   return Object.entries(folders || {}).reduce(
-    (acc, [folderName, folderData]) => {
+    (acc: Record<string, FolderData>, [folderName, folderData]) => {
       let resources = folderData.resources;
 
       // Apply file type filter
@@ -56,9 +64,14 @@ const filterResources = (
           case 'z-a':
             return b.name.localeCompare(a.name);
           case 'dateAdded':
-            return new Date(a.dateAdded) - new Date(b.dateAdded);
+            return (
+              new Date(a.dateAdded).getTime() - new Date(b.dateAdded).getTime()
+            );
           case 'lastOpened':
-            return new Date(b.lastOpened) - new Date(a.lastOpened);
+            return (
+              new Date(b.lastOpened).getTime() -
+              new Date(a.lastOpened).getTime()
+            );
           default:
             return 0;
         }
@@ -81,58 +94,7 @@ const filterResources = (
   );
 };
 
-const AddFileModal = ({
-  isOpen,
-  onClose,
-  onSubmit,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (folderName: string) => void;
-}) => {
-  const [folderName, setFolderName] = useState('');
-
-  if (!isOpen) return null;
-
-  const handleSubmit = () => {
-    if (folderName.trim()) {
-      onSubmit(folderName);
-      setFolderName('');
-      onClose();
-    }
-  };
-
-  return (
-    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50'>
-      <div className='w-1/3 rounded-lg bg-gray-700 p-6 text-white'>
-        <h3 className='mb-4 text-lg font-semibold'>Add New Folder</h3>
-        <input
-          type='text'
-          value={folderName}
-          onChange={(e) => setFolderName(e.target.value)}
-          placeholder='Enter folder name'
-          className='mb-4 w-full rounded-md bg-gray-800 px-2 py-1 text-white outline-none'
-        />
-        <div className='flex justify-end gap-2'>
-          <button
-            onClick={handleSubmit}
-            className='rounded-md bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-500'
-          >
-            Submit
-          </button>
-          <button
-            onClick={onClose}
-            className='rounded-md bg-gray-800 px-4 py-2 text-sm text-white hover:bg-gray-600'
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const FilterModal = ({
+const FilterModal: React.FC<FilterModalProps> = ({
   isOpen,
   onClose,
   selectedSortOrder,
@@ -141,6 +103,7 @@ const FilterModal = ({
   setSelectedFileTypes,
   setSelectedDateRange,
   availableFileTypes,
+  selectedDateRange,
 }) => {
   if (!isOpen) return null;
 
@@ -217,39 +180,38 @@ const FilterModal = ({
             <input
               type='date'
               className='w-full rounded-md bg-gray-700 px-2 py-1'
+              value={selectedDateRange.from}
               onChange={(e) =>
-                setSelectedDateRange((prev) => ({
-                  ...prev,
+                setSelectedDateRange({
+                  ...selectedDateRange,
                   from: e.target.value,
-                }))
+                })
               }
             />
             <input
               type='date'
               className='w-full rounded-md bg-gray-700 px-2 py-1'
+              value={selectedDateRange.to}
               onChange={(e) =>
-                setSelectedDateRange((prev) => ({
-                  ...prev,
+                setSelectedDateRange({
+                  ...selectedDateRange,
                   to: e.target.value,
-                }))
+                })
               }
             />
           </div>
         </div>
         <Divider />
-        <div className=''>
+        <div className='flex justify-between'>
           <button
             onClick={handleClearFilters}
-            className='rounded-md bg-gray-700 px-2 py-1 text-sm text-white hover:bg-gray-400'
+            className='rounded-md bg-gray-700 px-2 py-1 text-sm text-white hover:bg-gray-600'
           >
             Reset Filters
           </button>
-        </div>
-        <Divider />
-        <div className='flex w-full justify-end'>
           <button
             onClick={onClose}
-            className='rounded-md bg-gray-700 px-2 py-1 text-sm text-white hover:bg-gray-400'
+            className='rounded-md bg-gray-700 px-2 py-1 text-sm text-white hover:bg-gray-600'
           >
             Close
           </button>
@@ -260,103 +222,37 @@ const FilterModal = ({
 };
 
 export default function FileList() {
-  const sensors = useSensors(useSensor(PointerSensor));
-  const { currentDocument, fetchDocument } = useCurrentDocument();
-
-  const [expandedFolders, setExpandedFolders] = useState<{
-    [key: string]: boolean;
-  }>({});
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedSortOrder, setSelectedSortOrder] = useState<string>('a-z');
+  const { currentDocument } = useCurrentDocument();
+  const [expandedFolders, setExpandedFolders] = useState<
+    Record<string, boolean>
+  >({});
+  const [selectedSortOrder, setSelectedSortOrder] = useState('a-z');
   const [selectedFileTypes, setSelectedFileTypes] = useState<string[]>([]);
   const [selectedDateRange, setSelectedDateRange] = useState<{
     from: string;
     to: string;
-  }>({ from: '', to: '' });
+  }>({
+    from: '',
+    to: '',
+  });
+  const [searchQuery, setSearchQuery] = useState('');
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [isAddFileModalOpen, setIsAddFileModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const availableFileTypes = [
-    'PDF',
-    'Word',
-    'Excel',
-    'PowerPoint',
-    'CSV',
-    'HTML',
-    'PNG',
-    'JPG',
-    'GIF',
-    'Link',
-    'Other',
-  ];
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (currentDocument) {
-        setLoading(true);
-        await fetchDocument(currentDocument.id);
-        setLoading(false);
-      } else {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  const filteredFolders = useMemo(
-    () =>
-      filterResources(
-        currentDocument?.folders || {},
-        selectedFileTypes,
-        selectedDateRange,
-        selectedSortOrder,
-        searchQuery,
-      ),
-    [
-      currentDocument?.folders,
-      selectedFileTypes,
-      selectedDateRange,
-      selectedSortOrder,
-      searchQuery,
-    ],
-  );
-
-  const handleAddFolder = async (folderName: string) => {
-    if (!folderName.trim() || !currentDocument?.id) {
-      console.error('Folder name and document ID are required.');
-      return;
-    }
-    setLoading(true);
-    try {
-      const response = await fetch(`api/db/documents/addFolder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentId: currentDocument.id,
-          folderName,
+    if (currentDocument?.folders) {
+      // Initialize expanded state for all folders
+      const initialExpandedState = Object.keys(currentDocument.folders).reduce(
+        (acc, folderName) => ({
+          ...acc,
+          [folderName]: true, // Set to true to expand all folders by default
         }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('Error adding folder:', error.message);
-        alert(error.message || 'Failed to add folder.');
-        return;
-      }
-
-      await fetchDocument(currentDocument.id);
-      setIsAddFileModalOpen(false);
-    } catch (error) {
-      console.error('Error adding folder:', error);
-      alert('An error occurred while adding the folder.');
-    } finally {
-      setLoading(false);
+        {},
+      );
+      setExpandedFolders(initialExpandedState);
     }
-  };
+  }, [currentDocument?.folders]);
 
-  if (loading) {
+  if (!currentDocument) {
     return (
       <div className='flex h-full items-center justify-center'>
         <div className='text-center'>
@@ -366,68 +262,57 @@ export default function FileList() {
     );
   }
 
+  const filteredFolders = filterResources(
+    currentDocument.folders,
+    selectedFileTypes,
+    selectedDateRange,
+    selectedSortOrder,
+    searchQuery,
+  );
+
   return (
-    <DndContext sensors={sensors}>
-      <div className='flex h-full w-full flex-col overflow-auto'>
-        <TextInput
-          placeholder='Search Resources'
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
+    <div className='h-full w-full'>
+      <div className='mb-4 flex items-center justify-between'>
+        <div className='flex-1'>
+          <TextInput
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder='Search resources...'
+          />
+        </div>
         <button
-          className='my-2 rounded-md bg-gray-800 px-2 py-1 text-sm text-white hover:bg-gray-700'
           onClick={() => setIsFilterModalOpen(true)}
+          className='ml-2 rounded-md bg-gray-800 px-3 py-1 text-white hover:bg-gray-700'
         >
-          Open Filters
+          <FaFilter />
         </button>
-
-        <Divider />
-
-        <div className='h-full overflow-scroll'>
-          {Object.entries(filteredFolders).map(([key, folder]) => (
-            <TableFolder
-              key={key}
-              folderData={folder}
-              isExpanded={!!expandedFolders[key]}
-              onToggle={() =>
-                setExpandedFolders((prev) => ({
-                  ...prev,
-                  [key]: !prev[key],
-                }))
-              }
-            />
-          ))}
-        </div>
-
-        <Divider />
-
-        <div className='flex justify-center'>
-          <button
-            onClick={() => setIsAddFileModalOpen(true)}
-            className='w-full rounded-md bg-gray-800 px-2 py-1 text-sm text-white hover:bg-gray-700'
-          >
-            Add Folder
-          </button>
-        </div>
-
-        <AddFileModal
-          isOpen={isAddFileModalOpen}
-          onClose={() => setIsAddFileModalOpen(false)}
-          onSubmit={handleAddFolder}
-        />
-
-        <FilterModal
-          isOpen={isFilterModalOpen}
-          onClose={() => setIsFilterModalOpen(false)}
-          selectedSortOrder={selectedSortOrder}
-          setSelectedSortOrder={setSelectedSortOrder}
-          selectedFileTypes={selectedFileTypes}
-          setSelectedFileTypes={setSelectedFileTypes}
-          selectedDateRange={selectedDateRange}
-          setSelectedDateRange={setSelectedDateRange}
-          availableFileTypes={availableFileTypes}
-        />
       </div>
-    </DndContext>
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        selectedSortOrder={selectedSortOrder}
+        setSelectedSortOrder={setSelectedSortOrder}
+        selectedFileTypes={selectedFileTypes}
+        setSelectedFileTypes={setSelectedFileTypes}
+        setSelectedDateRange={setSelectedDateRange}
+        availableFileTypes={['pdf', 'doc', 'docx', 'txt']}
+        selectedDateRange={selectedDateRange}
+      />
+      <DndContext>
+        {Object.entries(filteredFolders).map(([folderName, folderData]) => (
+          <TableFolder
+            key={folderName}
+            folderData={{ ...folderData, name: folderName }}
+            isExpanded={expandedFolders[folderName] || false}
+            onToggle={() =>
+              setExpandedFolders((prev) => ({
+                ...prev,
+                [folderName]: !prev[folderName],
+              }))
+            }
+          />
+        ))}
+      </DndContext>
+    </div>
   );
 }

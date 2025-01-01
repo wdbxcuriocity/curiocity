@@ -1,6 +1,20 @@
 import { GET, DELETE } from '../route';
-import * as route from '../route';
-import AWS from 'aws-sdk';
+
+/* eslint-disable no-var */
+/* eslint-disable @typescript-eslint/no-namespace */
+declare global {
+  var mockDynamoDBSend: jest.Mock;
+  var mockDynamoDBClient: jest.Mock;
+  namespace NodeJS {
+    interface Global {
+      mockDynamoDBSend: jest.Mock;
+      mockDynamoDBClient: jest.Mock;
+      Response: any;
+    }
+  }
+}
+/* eslint-enable no-var */
+/* eslint-enable @typescript-eslint/no-namespace */
 
 // Mock the response object for global use in the test environment
 global.Response = {
@@ -18,23 +32,23 @@ describe('GET and DELETE endpoint tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset the mock implementation for each test
+    global.mockDynamoDBSend.mockReset();
   });
 
   test('GET request should return resource', async () => {
-    // Mock a DynamoDB response for the getObject call
-    const mockResourceData = {
-      Item: AWS.DynamoDB.Converter.marshall({
-        id: mockResourceId,
-        documentId: 'doc-123',
-        name: 'Test Resource',
-        url: 'https://example.com',
-        text: 'Sample text',
-      }),
+    // Mock DynamoDB response for GET operation
+    const mockItem = {
+      id: { S: mockResourceId },
+      documentId: { S: 'doc-123' },
+      name: { S: 'Test Resource' },
+      url: { S: 'https://example.com' },
+      text: { S: 'Sample text' },
     };
 
-    // Mock getObject to return the mock resource
-    const getObjectMock = jest.spyOn(route, 'getObject');
-    getObjectMock.mockImplementation(() => Promise.resolve(mockResourceData));
+    global.mockDynamoDBSend.mockImplementationOnce(() =>
+      Promise.resolve({ Item: mockItem }),
+    );
 
     // Mock request with a URL containing the 'id' query parameter
     const request = {
@@ -44,15 +58,26 @@ describe('GET and DELETE endpoint tests', () => {
     const response = await GET(request as any);
     const responseData = await response.json();
 
-    // Assertions
+    // Verify DynamoDB was called with correct parameters
+    expect(global.mockDynamoDBSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          TableName: expect.any(String),
+          Key: expect.objectContaining({
+            id: { S: mockResourceId },
+          }),
+        }),
+      }),
+    );
+
+    // Verify response data
     expect(responseData.id.S).toBe(mockResourceId);
     expect(responseData.name.S).toBe('Test Resource');
   });
 
   test('DELETE request should remove the resource', async () => {
-    // Mock deleteObject to simulate a successful deletion response
-    const deleteObjectMock = jest.spyOn(route, 'deleteObject');
-    deleteObjectMock.mockImplementation(() => Promise.resolve({}));
+    // Mock DynamoDB response for DELETE operation
+    global.mockDynamoDBSend.mockImplementationOnce(() => Promise.resolve({}));
 
     // Mock request with a JSON body containing the 'id'
     const request = {
@@ -62,7 +87,19 @@ describe('GET and DELETE endpoint tests', () => {
     const response = await DELETE(request as any);
     const responseData = await response.json();
 
-    // Assertions
+    // Verify DynamoDB was called with correct parameters
+    expect(global.mockDynamoDBSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          TableName: expect.any(String),
+          Key: expect.objectContaining({
+            id: { S: mockResourceId },
+          }),
+        }),
+      }),
+    );
+
+    // Verify response
     expect(responseData.msg).toBe('success');
   });
 });

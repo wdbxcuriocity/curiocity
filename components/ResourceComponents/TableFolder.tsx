@@ -62,8 +62,38 @@ const Folder = ({ folderData, isExpanded, onToggle }: FolderProps) => {
     }
   };
 
+  const handleDeleteFolder = async () => {
+    if (!currentDocument) return;
+
+    try {
+      const response = await fetch('/api/db/documents/deleteFolder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: currentDocument.id,
+          folderName: folderData.name,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Failed to delete folder:', errorData.error);
+        return;
+      }
+
+      console.log('Folder deleted successfully.');
+      setIsDeleting(false);
+      fetchDocument(currentDocument.id);
+    } catch (error) {
+      console.error('Error deleting folder:', error);
+    }
+  };
+
   return (
-    <div className='relative rounded-md px-2'>
+    <div
+      className='relative rounded-md px-2'
+      data-testid={`folder-${folderData.name}`}
+    >
       <div
         className='mb-2 flex cursor-pointer items-center justify-between border-b-[1px] border-gray-700 py-1 text-white hover:border-gray-400 hover:text-gray-400'
         onClick={onToggle}
@@ -99,36 +129,27 @@ const Folder = ({ folderData, isExpanded, onToggle }: FolderProps) => {
             Rename Folder
           </button>
           <button
-            className='block w-full px-4 py-2 text-left hover:bg-gray-600'
-            onClick={async () => {
+            className='block w-full px-4 py-2 text-left text-red-400 hover:bg-gray-600'
+            onClick={() => {
               setIsDeleting(true);
-
-              try {
-                const response = await fetch('/api/db/documents/deleteFolder', {
-                  method: 'DELETE',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    folderName: folderData.name,
-                    documentId: currentDocument.id,
-                  }),
-                });
-
-                if (!response.ok) {
-                  const errorData = await response.json();
-                  throw new Error(errorData.error || 'Failed to delete folder');
-                }
-                await fetchDocument(currentDocument.id);
-              } catch (error) {
-                console.error('Error deleting folder:', error);
-              } finally {
-                setIsDeleting(false);
-              }
+              setIsDropdownOpen(false);
             }}
           >
-            {isDeleting ? 'Deleting...' : 'Delete Folder'}
+            Delete Folder
           </button>
+        </div>
+      )}
+
+      {isExpanded && (
+        <div className='mt-2' data-testid={`folder-content-${folderData.name}`}>
+          {resources.map((resource) => (
+            <TableRow
+              key={resource.id}
+              resourceCompressed={resource}
+              folderName={folderData.name}
+              availableFolders={Object.keys(folders)}
+            />
+          ))}
         </div>
       )}
 
@@ -142,16 +163,29 @@ const Folder = ({ folderData, isExpanded, onToggle }: FolderProps) => {
         />
       )}
 
-      {isExpanded && (
-        <div className='mb-2 space-y-2'>
-          {resources.map((resource) => (
-            <TableRow
-              key={resource.id}
-              resourceCompressed={resource}
-              folderName={folderData.name}
-              availableFolders={Object.keys(folders)}
-            />
-          ))}
+      {isDeleting && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50'>
+          <div className='w-full max-w-lg rounded-lg bg-gray-800 p-6 text-white shadow-lg'>
+            <h1 className='mb-4 text-xl font-bold'>Delete Folder</h1>
+            <p className='mb-6 text-sm text-gray-400'>
+              Are you sure you want to delete the folder &quot;{folderData.name}
+              &quot;? This action cannot be undone.
+            </p>
+            <div className='flex justify-end gap-4'>
+              <button
+                onClick={() => setIsDeleting(false)}
+                className='rounded-md border border-gray-500 px-4 py-2 text-sm text-gray-300 duration-200 hover:bg-gray-700'
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteFolder}
+                className='rounded-md bg-red-600 px-4 py-2 text-sm text-white duration-200 hover:bg-red-700'
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

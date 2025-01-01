@@ -78,12 +78,37 @@ const FullTextEditor: React.FC<TextEditorProps> = ({
     }
   };
 
+  const handleTitleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTitle = e.target.value;
+    setTitle(newTitle);
+
+    if (!source) return;
+
+    const document = source as Document;
+    const updatedDocument: Document = {
+      ...document,
+      name: newTitle,
+      text: content,
+    };
+
+    try {
+      await fetch('/api/db', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedDocument),
+      });
+    } catch (error) {
+      console.error('Error updating title:', error);
+    }
+  };
+
   return (
     <div className='flex h-full max-w-full flex-col rounded-xl p-4 text-white'>
       <input
         type='text'
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={handleTitleChange}
+        onBlur={handleTitleChange}
         placeholder='Enter document title'
         className='text-gray-200outline-none mb-2 w-full rounded-t-xl bg-bgSecondary text-lg font-bold'
       />
@@ -195,7 +220,7 @@ const MiniTextEditor: React.FC<TextEditorProps> = ({ source }) => {
     try {
       const resourceMeta = source as ResourceMeta;
 
-      await fetch(`/api/db/ResourceMetaNotes`, {
+      await fetch(`/api/db/resourcemeta/notes`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: resourceMeta.id, notes: content }),
@@ -221,6 +246,7 @@ const MiniTextEditor: React.FC<TextEditorProps> = ({ source }) => {
           maxHeight: '5rem',
           overflowY: 'auto',
         }}
+        data-testid='react-quill'
       />
 
       <div className='flex items-center justify-end space-x-4 rounded-b-xl p-4'>

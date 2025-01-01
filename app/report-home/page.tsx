@@ -35,7 +35,7 @@ export default function ReportHome() {
 
   useEffect(() => {
     if (session?.user?.id) fetchDocuments();
-  }, [session]);
+  }, [session, fetchDocuments]);
 
   const handleBack = () => {
     fetchDocuments();

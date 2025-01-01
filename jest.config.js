@@ -1,18 +1,18 @@
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'jsdom',
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    '^react-markdown$': '<rootDir>/test/__mocks__/react-markdown.tsx',
+    '^remark-gfm$': '<rootDir>/test/__mocks__/remark-gfm.tsx',
+  },
   transform: {
-    '^.+\\.(ts|tsx)$': 'ts-jest', // Use ts-jest for TypeScript and TSX
-    '^.+\\.(js|jsx)$': 'babel-jest', // Use babel-jest for JS and JSX
+    '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
   },
   transformIgnorePatterns: [
-    '/node_modules/(?!@radix-ui)', // If Radix UI is used, it must be transformed
+    '/node_modules/(?!(react-markdown|remark-gfm|mdast-util-from-markdown|micromark|decode-named-character-reference|character-entities|property-information|space-separated-tokens|comma-separated-tokens)/)',
   ],
-  moduleNameMapper: {
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy', // Mock CSS imports
-    '\\.(gif|ttf|eot|svg|png)$': '<rootDir>/__mocks__/fileMock.js', // Mock images
-  },
-  setupFilesAfterEnv: ['<rootDir>/setupTests.ts'], // Any test setup scripts
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'], // Supported file types
-  transformIgnorePatterns: ['/node_modules/(?!@radix-ui)'],
+  moduleDirectories: ['node_modules', '<rootDir>'],
 };

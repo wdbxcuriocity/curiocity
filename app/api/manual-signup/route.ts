@@ -4,7 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { fromEnv } from '@aws-sdk/credential-providers';
 import bcrypt from 'bcrypt';
 
-const API_BASE_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.NEXTAUTH_URL || 'http://localhost:4000';
 
 const dynamoDbClient = new DynamoDBClient({
   region: process.env.S3_UPLOAD_REGION,

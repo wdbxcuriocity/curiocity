@@ -2,43 +2,25 @@
 
 import React, { useState, useEffect } from 'react';
 import TextEditor from '@/components/DocumentComponents/TextEditor';
-import { useCurrentResource } from '@/context/AppContext';
+import { ResourceMeta } from '@/types/types';
 
-const NotesEditor: React.FC<{ handleBack: () => void }> = ({ handleBack }) => {
-  const { currentResourceMeta } = useCurrentResource();
-  const [notes, setNotes] = useState<string | null>(null);
+interface NotesEditorProps {
+  resourceMeta: ResourceMeta | null;
+  onClose: () => void;
+}
+
+const NotesEditor: React.FC<NotesEditorProps> = ({ resourceMeta, onClose }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!currentResourceMeta) {
+    if (!resourceMeta) {
       setError('No resource selected.');
       setIsLoading(false);
       return;
     }
-
-    const fetchNotes = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(
-          `/api/db/resourcemeta/notes?id=${currentResourceMeta.id}`,
-        );
-        if (!response.ok) {
-          throw new Error(`Failed to fetch notes: ${response.statusText}`);
-        }
-        const data = await response.json();
-        setNotes(data.notes || '');
-      } catch (err) {
-        console.error(err);
-        setError('Failed to load notes. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchNotes();
-  }, [currentResourceMeta]);
+    setIsLoading(false);
+  }, [resourceMeta]);
 
   if (isLoading) {
     return (
@@ -56,21 +38,24 @@ const NotesEditor: React.FC<{ handleBack: () => void }> = ({ handleBack }) => {
     );
   }
 
-  if (!currentResourceMeta) {
-    return (
-      <div className='flex items-center justify-center'>
-        <p className='text-gray-500'>No resource selected.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className='flex flex-col text-white'>
-      <TextEditor
-        mode='mini'
-        source={{ ...currentResourceMeta, notes }}
-        generalCallback={handleBack}
-      />
+    <div className='flex h-full flex-col'>
+      <div className='flex items-center justify-between'>
+        <h2 className='text-lg font-bold text-white'>Notes</h2>
+        <button
+          onClick={onClose}
+          className='rounded-md bg-gray-800 px-2 py-1 text-sm text-white hover:bg-gray-700'
+        >
+          Close
+        </button>
+      </div>
+      <div className='mt-4 flex-1'>
+        <TextEditor
+          mode='mini'
+          source={resourceMeta || undefined}
+          generalCallback={onClose}
+        />
+      </div>
     </div>
   );
 };

@@ -78,7 +78,7 @@ App
 ## Environment Variables
 
 - Update `.env` when pushing to production:
-  - Change `NEXTAUTH_URL` from `localhost:3000` to the Vercel deployment URL.
+  - Change `NEXTAUTH_URL` from `localhost:4000` to the Vercel deployment URL.
 
 ## Parsing
 
