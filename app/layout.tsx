@@ -1,20 +1,14 @@
 import type { Metadata } from 'next';
-import localFont from 'next/font/local';
 import './globals.css';
 import { SwitchContextProvider } from '@/context/SwitchContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { CurrentDocumentProvider } from '@/context/AppContext';
 import { CurrentResourceProvider } from '@/context/AppContext';
-
-// TODO: Replace this with the fonts that designers provide.
-const geistSans = localFont({
-  src: './fonts/Geist-Regular.woff',
-  variable: '--font-geist-sans',
-  weight: '400',
-});
+import { inter } from './fonts';
 
 export const metadata: Metadata = {
-  title: 'Curiocity',
+  title: 'Apex',
+  description: 'Document Management System',
 };
 
 export default function RootLayout({
@@ -23,18 +17,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html>
-      <AuthProvider>
-        <SwitchContextProvider>
+    <html lang='en' suppressHydrationWarning className={inter.variable}>
+      <body
+        suppressHydrationWarning
+        className='bg-background font-sans text-foreground'
+      >
+        <AuthProvider>
           <CurrentDocumentProvider>
             <CurrentResourceProvider>
-              <body className={`${geistSans.variable} antialiased`}>
-                {children}
-              </body>
+              <SwitchContextProvider>{children}</SwitchContextProvider>
             </CurrentResourceProvider>
           </CurrentDocumentProvider>
-        </SwitchContextProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

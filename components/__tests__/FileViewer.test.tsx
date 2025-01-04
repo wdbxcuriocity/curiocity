@@ -50,6 +50,7 @@ const mockResourceMeta: ResourceMeta = {
   tags: [],
   documentId: 'test-doc',
   fileType: 'pdf',
+  folders: {},
 };
 
 const mockDocument: Document = {

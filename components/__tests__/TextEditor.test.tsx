@@ -85,14 +85,15 @@ describe('TextEditor Component', () => {
     const mockResourceMeta: ResourceMeta = {
       id: '1',
       hash: 'test-hash',
-      name: 'Test Resource',
+      name: 'test.pdf',
       dateAdded: new Date().toISOString(),
       lastOpened: new Date().toISOString(),
       notes: 'Test notes',
-      summary: 'Test summary',
+      summary: '',
       tags: [],
       documentId: 'test-doc',
       fileType: 'pdf',
+      folders: {},
     };
 
     render(<TextEditor mode='mini' source={mockResourceMeta} />);
@@ -170,14 +171,15 @@ describe('TextEditor Component', () => {
     const mockResourceMeta: ResourceMeta = {
       id: '1',
       hash: 'test-hash',
-      name: 'Test Resource',
+      name: 'test.pdf',
       dateAdded: new Date().toISOString(),
       lastOpened: new Date().toISOString(),
       notes: 'Test notes',
-      summary: 'Test summary',
+      summary: '',
       tags: [],
       documentId: 'test-doc',
       fileType: 'pdf',
+      folders: {},
     };
 
     render(<TextEditor mode='mini' source={mockResourceMeta} />);

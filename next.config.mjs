@@ -10,11 +10,6 @@ const config = {
     ],
   },
   experimental: {
-    turbo: {
-      rules: {
-        // Add any custom Turbopack rules here if needed
-      },
-    },
     workerThreads: true,
     cpus: 1,
   },
@@ -22,9 +17,7 @@ const config = {
     // Enforce ESLint during builds and development
     ignoreDuringBuilds: false,
     // Strict mode to catch all errors and warnings
-    dirs: ['pages', 'components', 'lib', 'app', 'context', 'utils'],
-    // Use our .eslintrc.json configuration
-    useEslintrc: true
+    dirs: ['pages', 'components', 'lib', 'app', 'context', 'utils']
   },
   typescript: {
     ignoreBuildErrors: true,

@@ -1,16 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-
 import { useCurrentDocument, useCurrentResource } from '@/context/AppContext';
-
 import FileViewer from '@/components/ResourceComponents/FilesViewer';
 import NavBar from '@/components/GeneralComponents/NavBar';
 import DocumentEditor from '@/components/DocumentComponents/DocumentEditor';
 import AllDocumentsGrid from '@/components/DocumentComponents/AllDocumentsGrid';
 import LoadingOverlay from '@/components/GeneralComponents/LoadingOverlay';
-
 import {
   ResizableHandle,
   ResizablePanel,
@@ -18,8 +15,7 @@ import {
 } from '@/components/ui/resizable';
 
 export default function ReportHome() {
-  const { data: session } = useSession();
-
+  const { data: session, status } = useSession();
   const {
     currentDocument,
     setCurrentDocument,
@@ -31,10 +27,11 @@ export default function ReportHome() {
 
   const { setCurrentResource, setCurrentResourceMeta } = useCurrentResource();
 
-  const [isLoading, setIsLoading] = useState(false);
   useEffect(() => {
-    if (session?.user) fetchDocuments();
-  }, [session, fetchDocuments]);
+    if (session?.user?.id) {
+      fetchDocuments();
+    }
+  }, [session?.user?.id, fetchDocuments]);
 
   const handleBack = () => {
     fetchDocuments();
@@ -45,18 +42,15 @@ export default function ReportHome() {
   };
 
   const handleDocumentClick = async (documentId: string) => {
-    setIsLoading(true);
     try {
       await fetchDocument(documentId);
       setViewingDocument(true);
     } catch (error) {
       console.error('Error fetching document:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  if (!session?.user) {
+  if (status === 'loading') {
     return (
       <div className='flex h-screen w-screen items-center justify-center bg-black'>
         <LoadingOverlay message='Authenticating...' />
@@ -64,11 +58,18 @@ export default function ReportHome() {
     );
   }
 
+  if (!session?.user?.id) {
+    return (
+      <div className='flex h-screen w-screen items-center justify-center bg-black'>
+        <LoadingOverlay message='Please sign in to continue' />
+      </div>
+    );
+  }
+
   return (
     <section className='h-screen overscroll-contain bg-bgPrimary'>
-      {isLoading && <LoadingOverlay message='Loading document...' />}
+      <NavBar onLogoClick={viewingDocument ? handleBack : undefined} />
       <div className='flex h-full w-full flex-col items-start justify-start overflow-hidden'>
-        {!currentDocument && <NavBar onLogoClick={handleBack} />}
         <ResizablePanelGroup
           direction='horizontal'
           className='flex-grow px-8 py-4'
@@ -77,7 +78,7 @@ export default function ReportHome() {
             <div className='h-full w-full max-w-full gap-4 overflow-hidden bg-bgPrimary p-4'>
               <div className='max-w-1/2 h-full shrink grow basis-1/2 flex-col gap-4 overflow-hidden rounded-xl border-[1px] border-zinc-700'>
                 <div className='h-full max-w-full grow flex-col overflow-hidden rounded-lg bg-bgSecondary'>
-                  {viewingDocument ? (
+                  {viewingDocument && currentDocument ? (
                     <DocumentEditor
                       document={currentDocument}
                       handleBack={handleBack}
@@ -90,12 +91,9 @@ export default function ReportHome() {
             </div>
           </ResizablePanel>
 
-          {currentDocument && (
+          {viewingDocument && currentDocument && (
             <>
-              <ResizableHandle
-                withHandle={true}
-                className='mx-2 my-4 bg-gray-400'
-              />
+              <ResizableHandle withHandle className='mx-2 my-4 bg-gray-400' />
               <ResizablePanel>
                 <div className='h-full w-full p-4'>
                   <div className='flex h-full flex-col rounded-xl border-[1px] border-zinc-700 bg-bgSecondary'>
