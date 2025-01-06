@@ -45,13 +45,12 @@ export async function DELETE(request: Request) {
     }
 
     let folderUpdated = false;
-
-    for (const [folder] of Object.entries(existingDocument.folders)) {
-      const originalLength = folder.resources?.length || 0;
-      folder.resources = (folder.resources || []).filter(
+    for (const { resources } of Object.values(existingDocument.folders)) {
+      const originalLength = resources?.length || 0;
+      folder.resources = (resources || []).filter(
         (resource: any) => resource.id !== resourceId,
       );
-      if (folder.resources.length < originalLength) {
+      if (resources.length < originalLength) {
         folderUpdated = true;
       }
     }

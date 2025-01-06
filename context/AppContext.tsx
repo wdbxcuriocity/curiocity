@@ -117,8 +117,6 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
       'image/png',
       'image/gif',
       'image/webp',
-      'application/zip',
-      'application/x-rar-compressed',
     ];
     const fileType = file.type.toLowerCase();
 
@@ -143,6 +141,7 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
       }
 
       const { markdown } = await response.json();
+      console.log('markdown', markdown);
       return markdown;
     } catch (error) {
       console.error(`Error extracting text from ${file.name}:`, error);
@@ -175,45 +174,52 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
 
       const { exists } = await resourceExistsResponse.json();
 
+      console.log('exists', exists);
+
       const { url } = await uploadToS3(file);
 
-      let parsedText = 'Disabled Processing';
       if (!exists) {
-        if (process.env.DISABLE_PARSING?.toUpperCase() === 'FALSE') {
-          parsedText = await extractText(file);
-          if (!parsedText) {
-            console.error(`Failed to parse text for file ${file.name}`);
-            return;
+        let parsedText = 'Disabled Processing';
+
+        const isParsingDisabled =
+          process.env.DISABLE_PARSING === 'true' || false;
+        if (!isParsingDisabled) {
+          if (!exists) {
+            parsedText = await extractText(file);
+            if (!parsedText) {
+              console.error(`Failed to parse text for file ${file.name}`);
+              return;
+            }
           }
         }
-      }
 
-      const fileReader = new FileReader();
-      fileReader.readAsDataURL(file);
-
-      fileReader.onload = async () => {
-        const fileBase64 = fileReader.result?.toString().split(',')[1];
-        if (!fileBase64) {
-          console.error('Failed to convert file to Base64');
-          return;
-        }
-
-        await fetch('/api/db/resourcemeta', {
+        // Upload the resource content if it doesn't exist
+        await fetch('/api/db/resource/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            file: fileBase64,
             documentId,
-            name: file.name,
-            folderName,
-            url,
             hash: fileHash,
+            url,
             markdown: parsedText,
-            dateAdded: new Date().toISOString(),
-            lastOpened: new Date().toISOString(),
           }),
         });
-      };
+      }
+
+      // Create or update the resource metadata
+      await fetch('/api/db/resourcemeta/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId,
+          name: file.name,
+          folderName,
+          fileHash,
+          url,
+          dateAdded: new Date().toISOString(),
+          lastOpened: new Date().toISOString(),
+        }),
+      });
     } catch (error) {
       console.error(`Error uploading resource ${file.name}:`, error);
     }
@@ -261,15 +267,6 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
 
       const [resourceToMove] = sourceFolder.resources.splice(resourceIndex, 1);
       targetFolder.resources.push(resourceToMove);
-
-      const updatedDocument = {
-        ...document,
-        folders: {
-          ...folders,
-          [sourceFolderName]: { ...sourceFolder },
-          [targetFolderName]: { ...targetFolder },
-        },
-      };
 
       await fetch('/api/db/resourcemeta/folders', {
         method: 'PUT',
@@ -339,7 +336,6 @@ export const CurrentDocumentProvider = ({
 }) => {
   const [allDocuments, setAllDocuments] = useState<Document[]>([]);
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
-  const [isSortedByLastOpened, setIsSortedByLastOpened] = useState(false);
   const [viewingDocument, setViewingDocument] = useState(false);
 
   const { data: session } = useSession();

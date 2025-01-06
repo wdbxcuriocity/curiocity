@@ -30,7 +30,9 @@ export async function POST(req: Request) {
       fileBlob,
       (file as any).name || 'uploaded-file',
     );
+    uploadFormData.append('mode', 'fast'); // Add this line to enable fast parsing
 
+    // Upload the file
     const uploadResponse = await fetch(
       'https://api.cloud.llamaindex.ai/api/parsing/upload',
       {
@@ -46,12 +48,13 @@ export async function POST(req: Request) {
     if (!uploadResponse.ok) {
       const errorData = await uploadResponse.json();
       console.error('Upload failed:', errorData);
-      throw new Error(`Upload failed: ${errorData.message || 'Unknown error'}`);
+      throw new Error(`Upload failed: ${errorData.detail || 'Unknown error'}`);
     }
 
     const uploadResult = await uploadResponse.json();
     const jobId = uploadResult.id;
 
+    // Poll for job status
     let jobStatus = '';
     while (jobStatus !== 'SUCCESS') {
       const statusResponse = await fetch(
@@ -67,7 +70,7 @@ export async function POST(req: Request) {
       if (!statusResponse.ok) {
         const errorData = await statusResponse.json();
         console.error('Status check failed:', errorData);
-        throw new Error(`Status check failed: ${errorData.message}`);
+        throw new Error(`Status check failed: ${errorData.detail}`);
       }
 
       const statusResult = await statusResponse.json();
@@ -80,8 +83,7 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log('Job completed successfully. Fetching result...');
-
+    // Retrieve the parsed result
     const resultResponse = await fetch(
       `https://api.cloud.llamaindex.ai/api/v1/parsing/job/${jobId}/result/raw/markdown`,
       {
@@ -95,7 +97,7 @@ export async function POST(req: Request) {
     if (!resultResponse.ok) {
       const errorData = await resultResponse.json();
       console.error('Result retrieval failed:', errorData);
-      throw new Error(`Result retrieval failed: ${errorData.message}`);
+      throw new Error(`Result retrieval failed: ${errorData.detail}`);
     }
 
     const markdown = await resultResponse.text();
