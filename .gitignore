@@ -8,6 +8,11 @@
 .env.local
 # testing
 /coverage
+/test-*.jpg
+/test-*.json
+/test.txt
+/profile-pictures
+/resources
 
 # next.js
 /.next/
@@ -26,7 +31,11 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+.env
 .env*.local
+.env.cloudflare
+.env.vercel
+.env.production
 
 # vercel
 .vercel
@@ -34,3 +43,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cloudflare
+.wrangler/
+.cursorrules
