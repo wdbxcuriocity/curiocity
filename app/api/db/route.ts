@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import AWS from 'aws-sdk';
 import { resourceMetaTable } from './resourcemeta/route';
 import { PostHog } from 'posthog-node';
+import { putD1Object, getD1Object, deleteD1Object } from './cloudflare';
 
 dotenv.config();
 
@@ -152,8 +153,27 @@ export const deleteObject = async (client: any, id: any, table: string) => {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const id = url.searchParams.get('id'); // Retrieves the 'id' query parameter
+  const id = url.searchParams.get('id');
+  const ctx = (request as any).context;
 
+  if (!id) {
+    return Response.json({ error: 'Missing id parameter' }, { status: 400 });
+  }
+
+  // Try D1 first if enabled
+  if (process.env.ENABLE_CLOUDFLARE_DATABASE === 'true' && ctx?.env?.DB) {
+    try {
+      const d1Result = await getD1Object(ctx.env.DB, id, 'Documents');
+      if (d1Result) {
+        return Response.json(d1Result);
+      }
+    } catch (error) {
+      console.error('Error reading from D1:', error);
+      // Fall through to DynamoDB
+    }
+  }
+
+  // Fallback to DynamoDB
   const item = await getObject(client, id, tableName);
   return Response.json(item.Item);
 }
@@ -161,51 +181,139 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   console.log('call put dynamodb');
   const data = await request.json();
+  const ctx = (request as any).context;
 
   // if had id (exiting object), pull from aws and update
   if (data.id) {
-    const dynamoItem = await getObject(client, data.id, tableName);
+    try {
+      // First get the existing item from DynamoDB
+      const dynamoItem = await getObject(client, data.id, tableName);
 
-    if (!dynamoItem?.Item) {
-      console.log('here');
-      throw new Error('Could not retrieve the item');
-    }
-
-    const updatedObj = AWS.DynamoDB.Converter.unmarshall(dynamoItem.Item);
-    for (const key in data) {
-      if (key !== 'resources') {
-        // don't overwrite resources
-        updatedObj[key] = data[key];
+      if (!dynamoItem?.Item) {
+        return Response.json({ error: 'Item not found' }, { status: 404 });
       }
+
+      const updatedObj = AWS.DynamoDB.Converter.unmarshall(dynamoItem.Item);
+      for (const key in data) {
+        if (key !== 'resources') {
+          // don't overwrite resources
+          updatedObj[key] = data[key];
+        }
+      }
+
+      // Write to DynamoDB
+      try {
+        await putObject(
+          client,
+          AWS.DynamoDB.Converter.marshall(updatedObj),
+          tableName,
+        );
+      } catch (e) {
+        console.error('Failed to write to DynamoDB:', e);
+        // Log analytics for failure
+        posthog.capture({
+          distinctId: data.ownerID,
+          event: 'Document Update Failed',
+          properties: {
+            id: data.id,
+            timeStamp: getCurrentTime(),
+            error: String(e),
+            stage: 'DynamoDB Write',
+          },
+        });
+        return Response.json(
+          { error: 'Failed to update document' },
+          { status: 500 },
+        );
+      }
+
+      // If Cloudflare storage is enabled and we have D1 access
+      if (process.env.ENABLE_CLOUDFLARE_DATABASE === 'true' && ctx?.env?.DB) {
+        try {
+          const d1Result = await putD1Object(
+            ctx.env.DB,
+            updatedObj,
+            'Documents',
+          );
+          if (!d1Result.success) {
+            // If D1 fails, rollback DynamoDB and track error
+            await putObject(
+              client,
+              AWS.DynamoDB.Converter.marshall(dynamoItem.Item),
+              tableName,
+            );
+            posthog.capture({
+              distinctId: data.ownerID,
+              event: 'Document Update Failed',
+              properties: {
+                id: data.id,
+                timeStamp: getCurrentTime(),
+                error: d1Result.error,
+                stage: 'D1 Write',
+              },
+            });
+            return Response.json(
+              { error: 'Failed to update document' },
+              { status: 500 },
+            );
+          }
+        } catch (error) {
+          // If D1 fails with exception, rollback DynamoDB and track error
+          await putObject(
+            client,
+            AWS.DynamoDB.Converter.marshall(dynamoItem.Item),
+            tableName,
+          );
+          posthog.capture({
+            distinctId: data.ownerID,
+            event: 'Document Update Failed',
+            properties: {
+              id: data.id,
+              timeStamp: getCurrentTime(),
+              error: String(error),
+              stage: 'D1 Write Exception',
+            },
+          });
+          return Response.json(
+            { error: 'Failed to update document' },
+            { status: 500 },
+          );
+        }
+      }
+
+      // Log analytics for success
+      posthog.capture({
+        distinctId: data.ownerID,
+        event: 'Document Update Successful',
+        properties: {
+          id: data.id,
+          timeStamp: getCurrentTime(),
+        },
+      });
+
+      return Response.json(updatedObj);
+    } catch (error) {
+      console.error('Error updating document:', error);
+      posthog.capture({
+        distinctId: data.ownerID,
+        event: 'Document Update Failed',
+        properties: {
+          id: data.id,
+          timeStamp: getCurrentTime(),
+          error: String(error),
+        },
+      });
+      return Response.json({ error: 'Internal server error' }, { status: 500 });
     }
-
-    console.log('updatedObj', updatedObj);
-
-    // put the updated object to the db
-    const res = await putObject(
-      client,
-      AWS.DynamoDB.Converter.marshall(updatedObj),
-      tableName,
-    );
-
-    posthog.capture({
-      distinctId: data.ownerID, // Unique identifier for the obj
-      event: 'Document Update Successful', // Event name
-      properties: {
-        id: data.id,
-        timeStamp: getCurrentTime(),
-      },
-    });
-
-    console.log('Updated object: ', res);
   }
 
-  return Response.json({});
+  return Response.json({ error: 'No id provided' }, { status: 400 });
 }
 
 export async function POST(request: Request) {
   console.log('Call create DynamoDB');
   const data = await request.json();
+  const ctx = (request as any).context;
 
   const defaultFolder = { name: 'General', resources: [] };
   const Item: Document = {
@@ -222,7 +330,16 @@ export async function POST(request: Request) {
   const inputData = AWS.DynamoDB.Converter.marshall(Item);
 
   try {
+    // Write to DynamoDB
     await putObject(client, inputData, tableName);
+
+    // If Cloudflare storage is enabled and we have D1 access, also write to D1
+    if (process.env.ENABLE_CLOUDFLARE_DATABASE === 'true' && ctx?.env?.DB) {
+      const d1Result = await putD1Object(ctx.env.DB, Item, 'Documents');
+      if (!d1Result.success) {
+        console.error('Failed to write to D1:', d1Result.error);
+      }
+    }
 
     posthog.capture({
       distinctId: data.ownerID,
@@ -253,35 +370,46 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const data = await request.json();
+  const ctx = (request as any).context;
   console.log('call delete dynamodb: ', data.id);
 
-  // create posthog event for doc deleted
+  // Get object for PostHog events
   const obj = await getObject(client, data.id, tableName);
   const updatedObj = AWS.DynamoDB.Converter.unmarshall(obj.Item);
 
-  console.log('posthog delete: ', updatedObj);
+  try {
+    // Delete from DynamoDB
+    await deleteObject(client, data.id, tableName);
 
-  await deleteObject(client, data.id, tableName).catch(() => {
+    // If enabled, also delete from D1
+    if (process.env.ENABLE_CLOUDFLARE_DATABASE === 'true' && ctx?.env?.DB) {
+      const d1Result = await deleteD1Object(ctx.env.DB, data.id, 'Documents');
+      if (!d1Result.success) {
+        console.error('Failed to delete from D1:', d1Result.error);
+      }
+    }
+
     posthog.capture({
-      distinctId: updatedObj.ownerID, // Unique identifier for the user
-      event: 'Document Delete Failed', // Event name
+      distinctId: updatedObj.ownerID,
+      event: 'Document Deleted',
       properties: {
         documentId: data.id,
         name: updatedObj.name,
         timeStamp: getCurrentTime(),
       },
     });
-  });
-
-  posthog.capture({
-    distinctId: updatedObj.ownerID, // Unique identifier for the user
-    event: 'Document Deleted', // Event name
-    properties: {
-      documentId: data.id,
-      name: updatedObj.name,
-      timeStamp: getCurrentTime(),
-    },
-  });
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    posthog.capture({
+      distinctId: updatedObj.ownerID,
+      event: 'Document Delete Failed',
+      properties: {
+        documentId: data.id,
+        name: updatedObj.name,
+        timeStamp: getCurrentTime(),
+      },
+    });
+  }
 
   return Response.json({ msg: 'success' });
 }
