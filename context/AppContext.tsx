@@ -9,7 +9,6 @@ import {
 } from '@/types/types';
 import { useSession } from 'next-auth/react';
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { useS3Upload } from 'next-s3-upload';
 import AWS from 'aws-sdk';
 import crypto from 'crypto';
 
@@ -42,7 +41,6 @@ const CurrentResourceContext = createContext<
 >(undefined);
 
 export function CurrentResourceProvider({ children }: { children: ReactNode }) {
-  const { uploadToS3 } = useS3Upload();
   const [currentResource, setCurrentResource] = useState<Resource | null>(null);
   const [currentResourceMeta, setCurrentResourceMeta] =
     useState<ResourceMeta | null>(null);
@@ -72,8 +70,12 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
 
       const resourceMeta = await response.json();
       return resourceMeta;
-    } catch (error) {
-      console.error('Error fetching ResourceMeta:', error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Error fetching ResourceMeta:', error.message);
+      } else {
+        console.error('Error fetching ResourceMeta:', error);
+      }
       throw error;
     }
   };
@@ -173,10 +175,29 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
       }
 
       const { exists } = await resourceExistsResponse.json();
-
       console.log('exists', exists);
 
-      const { url } = await uploadToS3(file);
+      // Upload to both S3 and R2
+      const uploadResponse = await fetch('/api/storage/upload', {
+        method: 'POST',
+        body: (() => {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('documentId', documentId);
+          formData.append('folderName', folderName);
+          return formData;
+        })(),
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Failed to upload file: ${uploadResponse.statusText}`);
+      }
+
+      const { url, s3Success, r2Success } = await uploadResponse.json();
+
+      if (!s3Success && !r2Success) {
+        throw new Error('Failed to upload file to storage');
+      }
 
       if (!exists) {
         let parsedText = 'Disabled Processing';
@@ -256,7 +277,7 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
       }
 
       const resourceIndex = sourceFolder.resources.findIndex(
-        (resource) => resource.id === resourceId,
+        (resource: ResourceCompressed) => resource.id === resourceId,
       );
 
       if (resourceIndex === -1) {
@@ -319,7 +340,7 @@ interface CurrentDocumentContextProps {
   currentDocument: Document | null;
   setCurrentDocument: (doc: Document | null) => void;
   fetchDocuments: () => Promise<void>;
-  fetchDocument: (id: string) => Promise<void>;
+  fetchDocument: (id: string) => Promise<Document | undefined>;
   createDocument: (name: string, userId: string) => Promise<void>;
   viewingDocument: boolean;
   setViewingDocument: (isViewing: boolean) => void;
@@ -366,7 +387,7 @@ export const CurrentDocumentProvider = ({
       .catch((error) => console.error('Error fetching documents:', error));
   };
 
-  const fetchDocument = async (id: string) => {
+  const fetchDocument = async (id: string): Promise<Document | undefined> => {
     if (!id) return;
 
     try {

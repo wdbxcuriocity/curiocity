@@ -5,6 +5,7 @@ module.exports = {
       'lh3.googleusercontent.com',
       'wdb-curiocity-bucket.s3.amazonaws.com', // Global S3 URL
       'wdb-curiocity-bucket.s3.us-west-1.amazonaws.com', // Regional S3 URL
+      'curiocity-apex-storage.r2.dev', // Cloudflare R2 URL
     ],
   },
   experimental: {

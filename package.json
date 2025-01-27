@@ -79,6 +79,7 @@
     "@babel/preset-env": "^7.26.0",
     "@babel/preset-react": "^7.25.9",
     "@babel/preset-typescript": "^7.26.0",
+    "@cloudflare/workers-types": "^4.20250124.3",
     "@radix-ui/react-switch": "^1.1.1",
     "@testing-library/jest-dom": "^6.6.2",
     "@testing-library/react": "^16.0.1",
@@ -114,5 +115,6 @@
   },
   "engines": {
     "node": "18.x"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
