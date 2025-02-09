@@ -1,12 +1,13 @@
 import dotenv from 'dotenv';
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
-import AWS from 'aws-sdk';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
 import { putR2Object } from '../../storage/cloudflare';
+import { log, redact, debug, error } from '@/lib/logging';
 
 dotenv.config();
 
-const s3 = new AWS.S3();
+const s3Client = new S3Client({ region: 'us-west-1' });
 const client = new DynamoDBClient({ region: 'us-west-1' });
 const userTable = process.env.USER_TABLE_NAME || '';
 const bucketName = process.env.S3_UPLOAD_BUCKET || '';
@@ -30,22 +31,33 @@ async function putS3Object(
     Body: fileBuffer,
     ContentType: contentType,
   };
-  const s3Response = await s3.upload(s3Params).promise();
-  return s3Response.Location;
+  await s3Client.send(new PutObjectCommand(s3Params));
+  return `https://${bucketName}.s3.us-west-1.amazonaws.com/${key}`;
 }
 
 // The main handler function
 export async function POST(request: Request) {
+  const correlationId = crypto.randomUUID();
   try {
-    console.log('upload-photo POST request received');
-
     const formData = await request.formData();
+    log({
+      level: 'INFO',
+      service: 'upload',
+      message: 'File upload started',
+      correlationId,
+      metadata: redact({
+        fileSize: (formData.get('file') as File)?.size,
+        fileType: (formData.get('file') as File)?.type,
+      }),
+    });
+    debug('Starting photo upload process');
+
     const userId = formData.get('userId') as string;
     const file = formData.get('file') as File;
     const ctx = (request as any).context;
 
     if (!userId || !file) {
-      console.error('Missing userId or file in the request');
+      error('Missing userId or file in request');
       return new Response(
         JSON.stringify({ err: 'User ID and file are required' }),
         { status: 400 },
@@ -54,7 +66,6 @@ export async function POST(request: Request) {
 
     // Read the file buffer for processing
     const fileBuffer = await file.arrayBuffer();
-    // const fileHash = generateFileHash(Buffer.from(fileBuffer));
 
     // Generate a unique filename and upload to S3
     const fileName = `profile-pictures/${userId}/${uuidv4()}_${file.name}`;
@@ -71,8 +82,9 @@ export async function POST(request: Request) {
         fileName,
         file.type,
       );
-    } catch (error) {
-      console.error('Failed to upload to S3:', error);
+      debug('Successfully uploaded file to S3');
+    } catch (e: unknown) {
+      error('Failed to upload to S3', e);
       s3Success = false;
     }
 
@@ -86,14 +98,15 @@ export async function POST(request: Request) {
           file.type,
         );
         if (!r2Result.success) {
-          console.error('Failed to upload to R2:', r2Result.error);
+          error('Failed to upload to R2', new Error(String(r2Result.error)));
           r2Success = false;
         } else if (!imageUrl && r2Result.url) {
           // If S3 failed but R2 succeeded, use R2 URL
           imageUrl = r2Result.url;
+          debug('Using R2 URL as fallback', { url: r2Result.url });
         }
-      } catch (error) {
-        console.error('Failed to upload to R2:', error);
+      } catch (e: unknown) {
+        error('Failed to upload to R2', e);
         r2Success = false;
       }
     }
@@ -121,10 +134,9 @@ export async function POST(request: Request) {
       },
     };
 
-    console.log(updateParams);
-
+    debug('Updating user image in DynamoDB', { userId });
     await client.send(new UpdateItemCommand(updateParams));
-    console.log('DynamoDB user image URL updated');
+    debug('Successfully updated user image in DynamoDB');
 
     return new Response(
       JSON.stringify({
@@ -134,8 +146,8 @@ export async function POST(request: Request) {
       }),
       { status: 200 },
     );
-  } catch (error) {
-    console.error('Error in upload-photo POST request:', error);
+  } catch (e: unknown) {
+    error('Error in photo upload process', e);
     return new Response(JSON.stringify({ err: 'Internal server error' }), {
       status: 500,
     });

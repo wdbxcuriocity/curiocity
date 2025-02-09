@@ -1,6 +1,7 @@
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
-import AWS from 'aws-sdk';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { NextResponse } from 'next/server';
+import { debug, error } from '@/lib/logging';
 
 // Initialize DynamoDB client
 const client = new DynamoDBClient({ region: 'us-west-1' });
@@ -13,17 +14,17 @@ const getAllEntries = async () => {
       TableName: tableName,
     };
 
+    debug('Fetching all users from DynamoDB');
     const command = new ScanCommand(params);
     const data = await client.send(command);
 
     // Unmarshall the data
-    const items =
-      data.Items?.map((item: any) => AWS.DynamoDB.Converter.unmarshall(item)) ||
-      [];
+    const items = data.Items?.map((item: any) => unmarshall(item)) || [];
 
+    debug('Successfully fetched users', { count: items.length });
     return items;
-  } catch (error) {
-    console.error('Error retrieving all entries:', error);
+  } catch (e: unknown) {
+    error('Error retrieving all entries', e);
     throw new Error('Could not retrieve entries');
   }
 };
@@ -33,8 +34,8 @@ export async function GET() {
   try {
     const items = await getAllEntries();
     return NextResponse.json(items);
-  } catch (error) {
-    console.log(error);
+  } catch (e: unknown) {
+    error('Error in GET request', e);
     return NextResponse.error();
   }
 }

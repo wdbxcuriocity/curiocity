@@ -4,6 +4,7 @@ import { FaFilePdf, FaImage, FaFileAlt, FaFile } from 'react-icons/fa';
 
 import { useCurrentDocument, useCurrentResource } from '@/context/AppContext';
 import { FaSpinner } from 'react-icons/fa';
+import { log } from '@/lib/logging';
 
 interface TableRowProps {
   resourceCompressed: ResourceCompressed;
@@ -50,15 +51,19 @@ const TableRow = ({
   };
 
   const handleRename = async () => {
-    setIsRenaming(true); // Start renaming loading state
+    setIsRenaming(true);
     try {
+      if (!currentDocument) {
+        throw new Error('No document selected');
+      }
+
       const response = await fetch(`/api/db/resourcemeta/name`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: resourceCompressed.id, // Using resourceCompressed.id
-          name: newResourceName, // New resource name from input
-          documentId: currentDocument.id, // Document ID
+          id: resourceCompressed.id,
+          name: newResourceName,
+          documentId: currentDocument.id,
         }),
       });
 
@@ -66,18 +71,31 @@ const TableRow = ({
         throw new Error('Failed to update resource name.');
       }
 
-      await fetchDocument(currentDocument.id); // Refresh document after renaming
-      setIsRenameModalOpen(false); // Close the rename modal
+      await fetchDocument(currentDocument.id);
+      setIsRenameModalOpen(false);
     } catch (error) {
-      console.error('Error renaming resource:', error);
+      log({
+        level: 'ERROR',
+        service: 'ui',
+        message: 'Error renaming resource',
+        error,
+        metadata: {
+          resourceId: resourceCompressed.id,
+          documentId: currentDocument?.id,
+        },
+      });
     } finally {
-      setIsRenaming(false); // End renaming loading state
+      setIsRenaming(false);
     }
   };
 
   const handleMoveTo = async (targetFolderName: string) => {
     setIsMoving(true);
     try {
+      if (!currentDocument) {
+        throw new Error('No document selected');
+      }
+
       setIsDropdownOpen(false);
       await moveResource(
         resourceCompressed.id,
@@ -87,7 +105,18 @@ const TableRow = ({
       );
       await fetchDocument(currentDocument.id);
     } catch (error) {
-      console.error('Error in moving resource:', error);
+      log({
+        level: 'ERROR',
+        service: 'ui',
+        message: 'Error moving resource',
+        error,
+        metadata: {
+          resourceId: resourceCompressed.id,
+          fromFolder: folderName,
+          toFolder: targetFolderName,
+          documentId: currentDocument?.id,
+        },
+      });
     } finally {
       setIsMoving(false);
       setIsMoveListOpen(false);
@@ -97,6 +126,10 @@ const TableRow = ({
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
+      if (!currentDocument) {
+        throw new Error('No document selected');
+      }
+
       const response = await fetch(`/api/db/resourcemeta/delete`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -114,7 +147,16 @@ const TableRow = ({
 
       await fetchDocument(currentDocument.id);
     } catch (error) {
-      console.error('Error deleting resource:', error);
+      log({
+        level: 'ERROR',
+        service: 'ui',
+        message: 'Error deleting resource',
+        error,
+        metadata: {
+          resourceId: resourceCompressed.id,
+          documentId: currentDocument?.id,
+        },
+      });
     } finally {
       setIsDeleting(false);
       setIsDropdownOpen(false);

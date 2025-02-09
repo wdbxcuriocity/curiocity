@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import AWS from 'aws-sdk';
 import { Resource, getObject } from '../route';
+import { debug, error } from '@/lib/logging';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 
 dotenv.config();
 
@@ -13,10 +14,11 @@ const resourceTable = process.env.RESOURCE_TABLE || '';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    debug('Fetching resource content', { hash: searchParams.get('hash') });
     const hash = searchParams.get('hash');
 
     if (!hash) {
-      console.error('Error: Missing hash in GET request');
+      error('Missing hash in GET request');
       return new Response(JSON.stringify({ err: 'Missing hash' }), {
         status: 400,
       });
@@ -26,20 +28,21 @@ export async function GET(request: Request) {
     const resource = await getObject(client, hash, resourceTable);
 
     if (!resource.Item) {
-      console.error('Error: Resource not found with hash:', hash);
+      error('Resource not found', null, { hash });
       return new Response(JSON.stringify({ err: 'Resource not found' }), {
         status: 404,
       });
     }
 
     // Convert DynamoDB item to JSON format
-    const resourceData = AWS.DynamoDB.Converter.unmarshall(
-      resource.Item,
-    ) as Resource;
+    const resourceData = unmarshall(resource.Item) as Resource;
 
     return new Response(JSON.stringify(resourceData), { status: 200 });
-  } catch (error) {
-    console.error('Error in GET request for resource:', error);
+  } catch (e: unknown) {
+    const { searchParams } = new URL(request.url);
+    error('Error in GET request for resource', e, {
+      hash: searchParams.get('hash'),
+    });
     return new Response(JSON.stringify({ err: 'Internal server error' }), {
       status: 500,
     });

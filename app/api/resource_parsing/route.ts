@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
+import { log, redact } from '@/lib/logging';
 
 export const runtime = 'edge';
 
 const LLAMA_CLOUD_API_KEY = process.env.LLAMA_CLOUD_API_KEY;
 
 export async function POST(req: Request) {
+  const correlationId = crypto.randomUUID();
   try {
     const formData = await req.formData();
     const file = formData.get('myFile');
@@ -47,7 +49,16 @@ export async function POST(req: Request) {
 
     if (!uploadResponse.ok) {
       const errorData = await uploadResponse.json();
-      console.error('Upload failed:', errorData);
+      log({
+        level: 'ERROR',
+        service: 'resource-parsing',
+        message: 'Upload failed',
+        correlationId,
+        error: errorData,
+        metadata: redact({
+          detail: errorData.detail,
+        }),
+      });
       throw new Error(`Upload failed: ${errorData.detail || 'Unknown error'}`);
     }
 
@@ -69,7 +80,16 @@ export async function POST(req: Request) {
 
       if (!statusResponse.ok) {
         const errorData = await statusResponse.json();
-        console.error('Status check failed:', errorData);
+        log({
+          level: 'ERROR',
+          service: 'resource-parsing',
+          message: 'Status check failed',
+          correlationId,
+          error: errorData,
+          metadata: redact({
+            detail: errorData.detail,
+          }),
+        });
         throw new Error(`Status check failed: ${errorData.detail}`);
       }
 
@@ -96,14 +116,37 @@ export async function POST(req: Request) {
 
     if (!resultResponse.ok) {
       const errorData = await resultResponse.json();
-      console.error('Result retrieval failed:', errorData);
+      log({
+        level: 'ERROR',
+        service: 'resource-parsing',
+        message: 'Result retrieval failed',
+        correlationId,
+        error: errorData,
+        metadata: redact({
+          detail: errorData.detail,
+        }),
+      });
       throw new Error(`Result retrieval failed: ${errorData.detail}`);
     }
 
     const markdown = await resultResponse.text();
     return NextResponse.json({ markdown });
   } catch (error) {
-    console.error('Error processing file:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    log({
+      level: 'ERROR',
+      service: 'resource-parsing',
+      message: 'Error processing file',
+      correlationId,
+      error,
+      metadata: redact({
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      }),
+    });
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 },
+    );
   }
 }

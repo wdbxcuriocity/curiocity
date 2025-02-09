@@ -3,7 +3,9 @@ import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { PostHog } from 'posthog-node';
 import { getCurrentTime } from '../../user/route';
 import { getObject } from '../route';
-import AWS from 'aws-sdk';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { debug, error } from '@/lib/logging';
+
 const client = new DynamoDBClient({ region: 'us-west-1' });
 const tableName = process.env.DOCUMENT_TABLE || '';
 
@@ -23,9 +25,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const obj = AWS.DynamoDB.Converter.unmarshall(
-    (await getObject(client, id, tableName)).Item,
-  );
+  const response = await getObject(client, id, tableName);
+  if (!response.Item) {
+    error('Document not found', null, { documentId: id });
+    return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+  }
+
+  const obj = unmarshall(response.Item);
 
   try {
     const command = new UpdateItemCommand({
@@ -47,11 +53,12 @@ export async function POST(request: NextRequest) {
     });
 
     await client.send(command);
+    debug('Document lastOpened updated successfully', { documentId: id });
     return NextResponse.json({
       message: 'lastOpened field updated successfully',
     });
-  } catch (error) {
-    console.error('Error updating lastOpened field:', error);
+  } catch (e: unknown) {
+    error('Error updating lastOpened field', e, { documentId: id });
     posthog.capture({
       distinctId: obj.ownerID, // Unique identifier for the obj
       event: 'Document Last Opened Failed', // Event name

@@ -7,6 +7,7 @@ import {
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { PostHog } from 'posthog-node';
+import { log, redact } from '@/lib/logging';
 
 dotenv.config();
 
@@ -25,21 +26,17 @@ export type User = {
 
 // Initialize the PostHog client
 const posthog = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY || '', {
-  host: process.env.NEXT_PUBLIC_POSTHOG_HOST, // Ensure this points to your PostHog host
+  host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
 });
 
 export const getCurrentTime = () => {
   const now = new Date();
-
-  // Format components of the date
   const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const seconds = String(now.getSeconds()).padStart(2, '0');
-
-  // Combine components into the desired format
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 };
 
@@ -57,7 +54,16 @@ export const putUser = async (inputData: User) => {
 
     return inputData;
   } catch (error) {
-    console.error('Error putting user:', error);
+    log({
+      level: 'ERROR',
+      service: 'user',
+      message: 'Failed to put user in database',
+      error,
+      metadata: redact({
+        userId: inputData.id,
+        email: inputData.email,
+      }),
+    });
     throw new Error('Could not put the user item');
   }
 };
@@ -65,7 +71,14 @@ export const putUser = async (inputData: User) => {
 // GET user object from DynamoDB by id
 export const getUser = async (id: string) => {
   if (typeof id !== 'string') {
-    console.error('Invalid data type for id:', typeof id);
+    log({
+      level: 'ERROR',
+      service: 'user',
+      message: 'Invalid user ID type',
+      metadata: redact({
+        idType: typeof id,
+      }),
+    });
     throw new Error('ID must be a string');
   }
 
@@ -81,8 +94,15 @@ export const getUser = async (id: string) => {
 
     return data.Item ? (unmarshall(data.Item) as User) : null;
   } catch (error) {
-    console.error('Error getting user:', error);
-    console.log(error);
+    log({
+      level: 'ERROR',
+      service: 'user',
+      message: 'Failed to get user from database',
+      error,
+      metadata: redact({
+        userId: id,
+      }),
+    });
     throw new Error('Could not retrieve the user');
   }
 };
@@ -97,23 +117,38 @@ export const deleteUser = async (id: string) => {
       }),
     );
     posthog.capture({
-      distinctId: id, // Unique identifier for the user
-      event: 'User Delete Successful', // Event name
+      distinctId: id,
+      event: 'User Delete Successful',
       properties: {
         id: id,
         timeStamp: getCurrentTime(),
       },
     });
-    console.log('User successfully deleted');
+    log({
+      level: 'INFO',
+      service: 'user',
+      message: 'User successfully deleted',
+      metadata: redact({
+        userId: id,
+      }),
+    });
   } catch (error) {
     posthog.capture({
-      distinctId: id, // Unique identifier for the user
-      event: 'User Delete Failed', // Event name
+      distinctId: id,
+      event: 'User Delete Failed',
       properties: {
         timeStamp: getCurrentTime(),
       },
     });
-    console.error('Error deleting user:', error);
+    log({
+      level: 'ERROR',
+      service: 'user',
+      message: 'Failed to delete user',
+      error,
+      metadata: redact({
+        userId: id,
+      }),
+    });
     throw new Error('Could not delete the user');
   }
 };
@@ -122,9 +157,19 @@ export const deleteUser = async (id: string) => {
 
 // GET endpoint to retrieve a user by id
 export async function GET(request: Request) {
-  console.log('Retrieving user from DynamoDB');
+  const correlationId = crypto.randomUUID();
   const url = new URL(request.url);
   const id = url.searchParams.get('id');
+
+  log({
+    level: 'INFO',
+    service: 'user',
+    message: 'User retrieval initiated',
+    correlationId,
+    metadata: redact({
+      userId: id,
+    }),
+  });
 
   if (!id) {
     return new Response('User ID is required', { status: 400 });
@@ -141,15 +186,34 @@ export async function GET(request: Request) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error retrieving user:', error);
+    log({
+      level: 'ERROR',
+      service: 'user',
+      message: 'Failed to retrieve user',
+      correlationId,
+      error,
+      metadata: redact({
+        userId: id,
+      }),
+    });
     return new Response('Internal Server Error', { status: 500 });
   }
 }
 
-// POST endpoint to create a new user db/
+// POST endpoint to create a new user
 export async function POST(request: Request) {
-  console.log('Creating new user in DynamoDB');
+  const correlationId = crypto.randomUUID();
   const data = await request.json();
+
+  log({
+    level: 'INFO',
+    service: 'user',
+    message: 'User creation initiated',
+    correlationId,
+    metadata: redact({
+      email: data?.email,
+    }),
+  });
 
   const { id, name, email, image, lastLoggedIn } = data || {};
   if (!id || !email) {
@@ -167,15 +231,25 @@ export async function POST(request: Request) {
 
   try {
     await putUser(newUser);
-    // create posthog event for user created
     posthog.capture({
-      distinctId: id, // Unique identifier for the user
-      event: 'User Created', // Event name
+      distinctId: id,
+      event: 'User Created',
       properties: {
         email: email,
         name: name,
         timeStamp: getCurrentTime(),
       },
+    });
+
+    log({
+      level: 'INFO',
+      service: 'user',
+      message: 'User created successfully',
+      correlationId,
+      userId: id,
+      metadata: redact({
+        email,
+      }),
     });
 
     return new Response(JSON.stringify(newUser), {
@@ -184,87 +258,140 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     posthog.capture({
-      distinctId: id, // Unique identifier for the user
-      event: 'User Creation Failed', // Event name
+      distinctId: id,
+      event: 'User Creation Failed',
       properties: {
         email: email,
         name: name,
         timeStamp: getCurrentTime(),
       },
     });
-    console.error('Error creating user:', error);
+    log({
+      level: 'ERROR',
+      service: 'user',
+      message: 'Failed to create user',
+      correlationId,
+      error,
+      metadata: redact({
+        email,
+      }),
+    });
     return new Response('Internal Server Error', { status: 500 });
   }
 }
 
 // PUT endpoint to update an existing user
 export async function PUT(request: Request) {
-  console.log('Updating user in DynamoDB');
-  const data = await request.json();
-
-  if (!data.id) {
-    return new Response('User ID is required', { status: 400 });
-  }
-
-  console.log('Retrieving user with ID:', data.id);
-  const existingUser = await getUser(data.id);
-
-  if (!existingUser) {
-    return new Response('User not found', { status: 404 });
-  }
-
-  const updatedUser: User = {
-    ...existingUser,
-    ...data,
-    lastLoggedIn: new Date().toISOString(),
-  };
-
+  const correlationId = crypto.randomUUID();
+  let data;
   try {
+    data = await request.json();
+    log({
+      level: 'INFO',
+      service: 'user',
+      message: 'User profile update initiated',
+      correlationId,
+      userId: data.id,
+      metadata: redact({
+        fieldsUpdated: Object.keys(data),
+      }),
+    });
+
+    const existingUser = await getUser(data.id);
+    if (!existingUser) {
+      return new Response('User not found', { status: 404 });
+    }
+
+    const updatedUser: User = {
+      ...existingUser,
+      ...data,
+      lastLoggedIn: new Date().toISOString(),
+    };
+
     await putUser(updatedUser);
     posthog.capture({
-      distinctId: data.id, // Unique identifier for the user
-      event: 'User Update Successful', // Event name
+      distinctId: data.id,
+      event: 'User Update Successful',
       properties: {
         id: data.id,
         timeStamp: getCurrentTime(),
       },
     });
+
+    log({
+      level: 'INFO',
+      service: 'user',
+      message: 'User profile updated successfully',
+      correlationId,
+      userId: data.id,
+      metadata: redact({
+        fieldsUpdated: Object.keys(data),
+      }),
+    });
+
     return new Response(JSON.stringify(updatedUser), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    posthog.capture({
-      distinctId: data.id, // Unique identifier for the user
-      event: 'User Update Failed', // Event name
-      properties: {
-        id: data.id,
-        timeStamp: getCurrentTime(),
-      },
+    log({
+      level: 'ERROR',
+      service: 'user',
+      message: 'User profile update failed',
+      correlationId,
+      error,
+      metadata: redact({
+        userId: data?.id,
+      }),
     });
-    console.error('Error updating user:', error);
     return new Response('Internal Server Error', { status: 500 });
   }
 }
 
-// DELETE endpoint to remove a user by ID
+// DELETE endpoint to remove a user
 export async function DELETE(request: Request) {
-  console.log('Deleting user from DynamoDB');
-  const data = await request.json();
-
-  const { id } = data;
-  if (!id) {
-    return new Response('User ID is required', { status: 400 });
-  }
-
+  const correlationId = crypto.randomUUID();
+  let data;
   try {
-    await deleteUser(id);
-    return new Response(
-      JSON.stringify({ message: 'User successfully deleted' }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    );
+    data = await request.json();
+
+    log({
+      level: 'INFO',
+      service: 'user',
+      message: 'User deletion initiated',
+      correlationId,
+      metadata: redact({
+        userId: data.id,
+      }),
+    });
+
+    await deleteUser(data.id);
+
+    log({
+      level: 'INFO',
+      service: 'user',
+      message: 'User deleted successfully',
+      correlationId,
+      metadata: redact({
+        userId: data.id,
+      }),
+    });
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    log({
+      level: 'ERROR',
+      service: 'user',
+      message: 'Failed to delete user',
+      correlationId,
+      error,
+      metadata: redact({
+        userId: data?.id,
+      }),
+    });
     return new Response('Internal Server Error', { status: 500 });
   }
 }

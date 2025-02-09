@@ -1,8 +1,8 @@
-import AWS from 'aws-sdk';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { putR2Object } from '../cloudflare';
+import { log } from '@/lib/logging';
 
-const s3 = new AWS.S3();
-const bucketName = process.env.S3_UPLOAD_BUCKET || '';
+const s3Client = new S3Client({ region: 'us-west-1' });
 
 // Function to put the object into S3
 async function putS3Object(
@@ -10,23 +10,25 @@ async function putS3Object(
   key: string,
   contentType: string,
 ): Promise<string> {
-  const s3Params = {
-    Bucket: bucketName,
-    Key: key,
-    Body: fileBuffer,
-    ContentType: contentType,
-  };
-  const s3Response = await s3.upload(s3Params).promise();
-  return s3Response.Location;
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: process.env.S3_UPLOAD_BUCKET,
+      Key: key,
+      Body: fileBuffer,
+      ContentType: contentType,
+    }),
+  );
+
+  return `https://${process.env.S3_UPLOAD_BUCKET}.s3.us-west-1.amazonaws.com/${key}`;
 }
 
 export async function POST(request: Request) {
+  const correlationId = crypto.randomUUID();
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const documentId = formData.get('documentId') as string;
     const folderName = formData.get('folderName') as string;
-    const ctx = (request as any).context;
 
     if (!file || !documentId || !folderName) {
       return new Response(
@@ -47,28 +49,60 @@ export async function POST(request: Request) {
     try {
       url = await putS3Object(Buffer.from(fileBuffer), key, file.type);
     } catch (error) {
-      console.error('Failed to upload to S3:', error);
+      log({
+        level: 'ERROR',
+        service: 'storage',
+        message: 'Failed to upload to S3',
+        correlationId,
+        error,
+        metadata: {
+          documentId,
+          fileName: file.name,
+        },
+      });
       s3Success = false;
     }
 
     // Upload to R2 if enabled
-    if (process.env.ENABLE_CLOUDFLARE_STORAGE === 'true' && ctx?.env?.BUCKET) {
+    if (
+      process.env.ENABLE_CLOUDFLARE_STORAGE === 'true' &&
+      (request as any)?.env?.BUCKET
+    ) {
       try {
         const r2Result = await putR2Object(
-          ctx.env.BUCKET,
+          (request as any).env.BUCKET,
           key,
           fileBuffer,
           file.type,
         );
         if (!r2Result.success) {
-          console.error('Failed to upload to R2:', r2Result.error);
+          log({
+            level: 'ERROR',
+            service: 'storage',
+            message: 'Failed to upload to R2',
+            correlationId,
+            error: r2Result.error,
+            metadata: {
+              documentId,
+              fileName: file.name,
+            },
+          });
           r2Success = false;
         } else if (!url && r2Result.url) {
-          // If S3 failed but R2 succeeded, use R2 URL
           url = r2Result.url;
         }
       } catch (error) {
-        console.error('Failed to upload to R2:', error);
+        log({
+          level: 'ERROR',
+          service: 'storage',
+          message: 'Failed to upload to R2',
+          correlationId,
+          error,
+          metadata: {
+            documentId,
+            fileName: file.name,
+          },
+        });
         r2Success = false;
       }
     }
@@ -90,7 +124,13 @@ export async function POST(request: Request) {
       { status: 200 },
     );
   } catch (error) {
-    console.error('Error in storage upload:', error);
+    log({
+      level: 'ERROR',
+      service: 'storage',
+      message: 'Error in storage upload',
+      correlationId,
+      error,
+    });
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
     });

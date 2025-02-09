@@ -9,8 +9,10 @@ import {
 } from '@/types/types';
 import { useSession } from 'next-auth/react';
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import AWS from 'aws-sdk';
 import crypto from 'crypto';
+import { debounce } from 'lodash';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { debug, error } from '@/lib/logging';
 
 interface CurrentResourceContextValue {
   currentResource: Resource | null;
@@ -70,47 +72,50 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
 
       const resourceMeta = await response.json();
       return resourceMeta;
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error('Error fetching ResourceMeta:', error.message);
-      } else {
-        console.error('Error fetching ResourceMeta:', error);
-      }
-      throw error;
+    } catch (e: unknown) {
+      error('Error fetching ResourceMeta', e);
+      throw e;
     }
   };
+
+  const debouncedFetchResourceAndMeta = debounce(
+    async (resourceMetaId: string, folderName: string) => {
+      try {
+        const resourceMeta = await fetchResourceMeta(resourceMetaId);
+        setCurrentResourceMeta(resourceMeta);
+
+        const resourceRes = await fetch(
+          `/api/db/resource?hash=${resourceMeta.hash}`,
+          {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+
+        if (!resourceRes.ok) {
+          throw new Error('Failed to fetch Resource');
+        }
+
+        const resource: Resource = await resourceRes.json();
+        setCurrentResource(resource);
+
+        await fetch('/api/db/resourcemeta/updateLastOpened', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resourceMetaId, folderName }),
+        });
+      } catch (e: unknown) {
+        error('Error fetching resource and metadata', e);
+      }
+    },
+    1000,
+  );
 
   const fetchResourceAndMeta = async (
     resourceMetaId: string,
     folderName: string,
   ) => {
-    try {
-      const resourceMeta = await fetchResourceMeta(resourceMetaId);
-      setCurrentResourceMeta(resourceMeta);
-
-      const resourceRes = await fetch(
-        `/api/db/resource?hash=${resourceMeta.hash}`,
-        {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-
-      if (!resourceRes.ok) {
-        throw new Error('Failed to fetch Resource');
-      }
-
-      const resource: Resource = await resourceRes.json();
-      setCurrentResource(resource);
-
-      await fetch('/api/db/resourcemeta/updateLastOpened', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resourceMetaId, folderName }),
-      });
-    } catch (error) {
-      console.error('Error fetching resource and metadata:', error);
-    }
+    return debouncedFetchResourceAndMeta(resourceMetaId, folderName);
   };
 
   const extractText = async (file: File): Promise<string> => {
@@ -143,10 +148,10 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
       }
 
       const { markdown } = await response.json();
-      console.log('markdown', markdown);
+      debug('Extracted text from file', { fileName: file.name });
       return markdown;
-    } catch (error) {
-      console.error(`Error extracting text from ${file.name}:`, error);
+    } catch (e: unknown) {
+      error(`Error extracting text from ${file.name}`, e);
       return '';
     }
   };
@@ -175,7 +180,7 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
       }
 
       const { exists } = await resourceExistsResponse.json();
-      console.log('exists', exists);
+      debug('Resource existence check', { exists, fileHash });
 
       // Upload to both S3 and R2
       const uploadResponse = await fetch('/api/storage/upload', {
@@ -208,7 +213,7 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
           if (!exists) {
             parsedText = await extractText(file);
             if (!parsedText) {
-              console.error(`Failed to parse text for file ${file.name}`);
+              error(`Failed to parse text for file ${file.name}`);
               return;
             }
           }
@@ -241,8 +246,8 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
           lastOpened: new Date().toISOString(),
         }),
       });
-    } catch (error) {
-      console.error(`Error uploading resource ${file.name}:`, error);
+    } catch (e: unknown) {
+      error(`Error uploading resource ${file.name}`, e);
     }
   };
 
@@ -263,7 +268,7 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
       }
 
       const dynamoResponse = await documentResponse.json();
-      const document = AWS.DynamoDB.Converter.unmarshall(dynamoResponse);
+      const document = unmarshall(dynamoResponse);
 
       const { folders } = document;
 
@@ -299,8 +304,8 @@ export function CurrentResourceProvider({ children }: { children: ReactNode }) {
           targetFolderName,
         }),
       });
-    } catch (error) {
-      console.error('Error moving resource:', error);
+    } catch (e: unknown) {
+      error('Error moving resource', e);
     }
   };
 
@@ -363,7 +368,7 @@ export const CurrentDocumentProvider = ({
 
   const fetchDocuments = async () => {
     if (!session?.user?.id) {
-      console.error('User ID not found. Please log in.');
+      error('User ID not found. Please log in.');
       return;
     }
 
@@ -384,27 +389,19 @@ export const CurrentDocumentProvider = ({
       .then((data) => {
         setAllDocuments(data);
       })
-      .catch((error) => console.error('Error fetching documents:', error));
+      .catch((e: unknown) => error('Error fetching documents', e));
   };
 
-  const fetchDocument = async (id: string): Promise<Document | undefined> => {
-    if (!id) return;
-
+  // Debounced version of the fetch operation
+  const debouncedFetchDocument = debounce(async (id: string) => {
     try {
-      const updateResponse = await fetch('/api/db/updateLastOpened', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-
-      if (!updateResponse.ok) {
-        throw new Error('Failed to update lastOpened field');
-      }
-
-      const fetchResponse = await fetch(`/api/db?id=${id}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const fetchResponse = await fetch(
+        `/api/db?id=${id}&updateLastOpened=true`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
 
       if (!fetchResponse.ok) {
         throw new Error('Failed to fetch document');
@@ -413,17 +410,23 @@ export const CurrentDocumentProvider = ({
       const dynamoResponse = await fetchResponse.json();
       const document: Document = mapDynamoDBItemToDocument(dynamoResponse);
 
-      setCurrentDocument(document); // Update context
-      setViewingDocument(true); // Set viewing state to true
+      setCurrentDocument(document);
+      setViewingDocument(true);
+      debug('Document fetched successfully', { documentId: id });
       return document;
-    } catch (error) {
-      console.error('Error fetching or updating document:', error);
+    } catch (e: unknown) {
+      error('Error fetching document', e);
     }
+  }, 1000); // 1 second debounce
+
+  const fetchDocument = async (id: string): Promise<Document | undefined> => {
+    if (!id) return;
+    return debouncedFetchDocument(id);
   };
 
   const createDocument = async (name: string, userId: string) => {
     if (!userId) {
-      console.error('User ID not provided. Cannot create document.');
+      error('User ID not provided. Cannot create document.');
       return;
     }
 
@@ -449,11 +452,11 @@ export const CurrentDocumentProvider = ({
 
       const data = await response.json();
       const createdDoc = { ...newDoc, id: data.id };
+      debug('Document created successfully', { documentId: data.id });
 
-      // setCurrentDocument(createdDoc);
       setAllDocuments((prevDocs) => [...prevDocs, createdDoc]);
-    } catch (error) {
-      console.error('Error creating document:', error);
+    } catch (e: unknown) {
+      error('Error creating document', e);
     }
   };
 

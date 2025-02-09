@@ -1,5 +1,6 @@
 import { R2Bucket } from '@cloudflare/workers-types';
-import AWS from 'aws-sdk';
+import { AwsClient } from 'aws4fetch';
+import { debug } from '@/lib/logging';
 
 interface TemporaryCredentials {
   accessKeyId: string;
@@ -8,7 +9,11 @@ interface TemporaryCredentials {
 }
 
 /**
- * Gets temporary credentials for R2 access
+ * Gets temporary credentials for R2 access.
+ * Currently not in use but maintained for:
+ * - Potential future security improvements using short-lived credentials
+ * - Alternative authentication method if needed
+ * - Different deployment environment configurations
  */
 async function getTemporaryCredentials(
   accountId: string,
@@ -39,117 +44,107 @@ async function getTemporaryCredentials(
   return data.result;
 }
 
-/**
- * Generates a presigned URL for R2 operations
- */
-export async function getR2PresignedUrl(
+// Function to generate presigned URLs for R2 operations
+export async function getPresignedUrl(
   bucket: R2Bucket,
   key: string,
-  operation: 'get' | 'put',
-  expiresIn: number = 3600,
-): Promise<{ success: boolean; error?: any; url?: string }> {
+  operation: 'get' | 'put' | 'delete',
+  expiresIn = 3600,
+): Promise<string> {
   try {
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const bucketName = process.env.R2_BUCKET_NAME;
-
-    if (!accountId || !bucketName) {
-      throw new Error('Missing required environment variables');
-    }
-
-    // Get temporary credentials
     const credentials = await getTemporaryCredentials(
-      accountId,
-      bucketName,
-      key,
+      process.env.R2_ACCOUNT_ID || '',
+      bucket.toString(),
+      key.split('/')[0], // Use first part of key as prefix
     );
 
-    // Use AWS SDK to generate presigned URL with R2 credentials
-    const s3 = new AWS.S3({
+    const client = new AwsClient({
       accessKeyId: credentials.accessKeyId,
       secretAccessKey: credentials.secretAccessKey,
       sessionToken: credentials.sessionToken,
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-      signatureVersion: 'v4',
-      region: 'auto',
     });
 
-    const params = {
-      Bucket: bucketName,
-      Key: key,
-      Expires: expiresIn,
-    };
-
-    const url = await s3.getSignedUrlPromise(
-      operation === 'get' ? 'getObject' : 'putObject',
-      params,
+    const signedUrl = await client.sign(
+      `https://${bucket}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`,
+      {
+        method:
+          operation === 'get' ? 'GET' : operation === 'put' ? 'PUT' : 'DELETE',
+        aws: { signQuery: true },
+        headers: {
+          'X-Amz-Expires': expiresIn.toString(),
+        },
+      },
     );
 
-    return { success: true, url };
-  } catch (error) {
-    console.error('Error generating presigned URL:', error);
-    return { success: false, error };
+    return signedUrl.toString();
+  } catch (e: unknown) {
+    debug('Failed to generate R2 presigned URL', {
+      error: e,
+      operation,
+      key,
+      expiresIn,
+    });
+    throw e;
   }
 }
 
 /**
- * Uploads a file to R2 storage
+ * Uploads an object to R2
  */
 export async function putR2Object(
   bucket: R2Bucket,
   key: string,
-  data: ArrayBuffer | Buffer,
+  data: ArrayBuffer,
   contentType?: string,
-): Promise<{ success: boolean; error?: any; url?: string }> {
+) {
   try {
     await bucket.put(key, data, {
       httpMetadata: contentType ? { contentType } : undefined,
     });
 
-    const customDomain = process.env.R2_CUSTOM_DOMAIN;
-    if (!customDomain) {
-      throw new Error('R2_CUSTOM_DOMAIN environment variable not set');
-    }
-
-    const url = `https://${customDomain}/${key}`;
+    const url = await getPresignedUrl(bucket, key, 'get');
     return { success: true, url };
-  } catch (error) {
-    console.error('Error uploading to R2:', error);
-    return { success: false, error };
+  } catch (e: unknown) {
+    debug('Failed to upload to R2', {
+      error: e,
+      key,
+      contentType,
+    });
+    return { success: false, error: e };
   }
 }
 
 /**
- * Gets a file from R2 storage
+ * Gets an object from R2
  */
-export async function getR2Object(
-  bucket: R2Bucket,
-  key: string,
-): Promise<{ success: boolean; error?: any; data?: ArrayBuffer }> {
+export async function getR2Object(bucket: R2Bucket, key: string) {
   try {
-    const obj = await bucket.get(key);
-    if (!obj) {
-      return { success: false, error: 'Object not found' };
-    }
-    const data = await obj.arrayBuffer();
+    const object = await bucket.get(key);
+    if (!object) return { success: false, error: 'Object not found' };
+
+    const data = await object.arrayBuffer();
     return { success: true, data };
-  } catch (error) {
-    console.error('Error getting from R2:', error);
-    return { success: false, error };
+  } catch (e: unknown) {
+    debug('Failed to get object from R2', {
+      error: e,
+      key,
+    });
+    return { success: false, error: e };
   }
 }
 
 /**
- * Deletes a file from R2 storage
+ * Deletes an object from R2
  */
-export async function deleteR2Object(
-  bucket: R2Bucket,
-  key: string,
-): Promise<{ success: boolean; error?: any }> {
+export async function deleteR2Object(bucket: R2Bucket, key: string) {
   try {
     await bucket.delete(key);
     return { success: true };
-  } catch (error) {
-    console.error('Error deleting from R2:', error);
-    return { success: false, error };
+  } catch (e: unknown) {
+    debug('Failed to delete from R2', {
+      error: e,
+      key,
+    });
+    return { success: false, error: e };
   }
 }

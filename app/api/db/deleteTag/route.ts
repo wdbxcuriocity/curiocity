@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
-import AWS from 'aws-sdk';
+import {
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+} from '@aws-sdk/client-dynamodb';
+import { debug, error } from '@/lib/logging';
+import { unmarshall, marshall } from '@aws-sdk/util-dynamodb';
 
-const dynamoDB = new AWS.DynamoDB({
-  region: 'us-west-1', // Replace with your region
-});
+const dynamoDB = new DynamoDBClient({ region: 'us-west-1' });
 
 const documentTable = process.env.DOCUMENT_TABLE || '';
 
@@ -28,7 +32,7 @@ export async function PUT(request: Request) {
       },
     };
 
-    const document = await dynamoDB.getItem(getParams).promise();
+    const document = await dynamoDB.send(new GetItemCommand(getParams));
 
     if (!document.Item) {
       return NextResponse.json(
@@ -38,7 +42,7 @@ export async function PUT(request: Request) {
     }
 
     // Unmarshall the DynamoDB response
-    const unmarshalledDoc = AWS.DynamoDB.Converter.unmarshall(document.Item);
+    const unmarshalledDoc = unmarshall(document.Item);
 
     // Remove the tag if it exists
     unmarshalledDoc.tags = unmarshalledDoc.tags || [];
@@ -56,14 +60,16 @@ export async function PUT(request: Request) {
     // Update the document with the modified tags
     const updateParams = {
       TableName: documentTable,
-      Item: AWS.DynamoDB.Converter.marshall(unmarshalledDoc),
+      Item: marshall(unmarshalledDoc),
     };
 
-    await dynamoDB.putItem(updateParams).promise();
+    await dynamoDB.send(new PutItemCommand(updateParams));
+
+    debug('Tag deleted successfully', { tagId: tag });
 
     return NextResponse.json({ message: 'Tag removed successfully.' });
-  } catch (error) {
-    console.error('Error deleting tag:', error);
+  } catch (e: unknown) {
+    error('Error deleting tag', e);
     return NextResponse.json(
       { error: 'Failed to delete tag from document.' },
       { status: 500 },

@@ -12,73 +12,78 @@ import TextInput from '../GeneralComponents/TextInput';
 import Divider from '../GeneralComponents/Divider';
 import { FaCheck } from 'react-icons/fa';
 import { useCurrentDocument } from '@/context/AppContext';
+import { ResourceCompressed } from '@/types/types';
+import { debug, error } from '@/lib/logging';
 
 const filterResources = (
-  folders,
-  fileTypes,
-  dateRange,
-  sortOrder,
-  searchQuery,
+  folders: Record<string, { resources: ResourceCompressed[] }>,
+  fileTypes: string[],
+  dateRange: { from: string; to: string },
+  sortOrder: string,
+  searchQuery: string,
 ) => {
-  return Object.entries(folders || {}).reduce(
-    (acc, [folderName, folderData]) => {
-      let resources = folderData.resources;
+  return Object.entries(folders || {}).reduce<
+    Record<string, { resources: ResourceCompressed[] }>
+  >((acc, [folderName, folderData]) => {
+    let resources = folderData.resources;
 
-      // Apply file type filter
-      if (fileTypes.length > 0) {
-        resources = resources.filter((resource) =>
-          fileTypes.includes(resource.fileType),
-        );
-      }
+    // Apply file type filter
+    if (fileTypes.length > 0) {
+      resources = resources.filter((resource) =>
+        fileTypes.includes(resource.fileType),
+      );
+    }
 
-      // Apply date range filter
-      if (dateRange.from || dateRange.to) {
-        const fromDate = dateRange.from
-          ? new Date(dateRange.from + 'T00:00:00Z')
-          : null;
-        const toDate = dateRange.to
-          ? new Date(dateRange.to + 'T23:59:59Z')
-          : null;
+    // Apply date range filter
+    if (dateRange.from || dateRange.to) {
+      const fromDate = dateRange.from
+        ? new Date(dateRange.from + 'T00:00:00Z')
+        : null;
+      const toDate = dateRange.to
+        ? new Date(dateRange.to + 'T23:59:59Z')
+        : null;
 
-        resources = resources.filter((resource) => {
-          const resourceDate = new Date(resource.dateAdded);
-          if (fromDate && resourceDate < fromDate) return false;
-          if (toDate && resourceDate > toDate) return false;
-          return true;
-        });
-      }
-
-      // Apply sorting
-      resources = resources.sort((a, b) => {
-        switch (sortOrder) {
-          case 'a-z':
-            return a.name.localeCompare(b.name);
-          case 'z-a':
-            return b.name.localeCompare(a.name);
-          case 'dateAdded':
-            return new Date(a.dateAdded) - new Date(b.dateAdded);
-          case 'lastOpened':
-            return new Date(b.lastOpened) - new Date(a.lastOpened);
-          default:
-            return 0;
-        }
+      resources = resources.filter((resource) => {
+        const resourceDate = new Date(resource.dateAdded);
+        if (fromDate && resourceDate < fromDate) return false;
+        if (toDate && resourceDate > toDate) return false;
+        return true;
       });
+    }
 
-      // Apply search query filter
-      if (searchQuery.trim()) {
-        resources = resources.filter((resource) =>
-          resource.name.toLowerCase().includes(searchQuery.toLowerCase()),
-        );
+    // Apply sorting
+    resources = resources.sort((a, b) => {
+      switch (sortOrder) {
+        case 'a-z':
+          return a.name.localeCompare(b.name);
+        case 'z-a':
+          return b.name.localeCompare(a.name);
+        case 'dateAdded':
+          return (
+            new Date(a.dateAdded).getTime() - new Date(b.dateAdded).getTime()
+          );
+        case 'lastOpened':
+          return (
+            new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime()
+          );
+        default:
+          return 0;
       }
+    });
 
-      if (resources.length > 0 || !searchQuery.trim()) {
-        acc[folderName] = { ...folderData, resources };
-      }
+    // Apply search query filter
+    if (searchQuery.trim()) {
+      resources = resources.filter((resource) =>
+        resource.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      );
+    }
 
-      return acc;
-    },
-    {},
-  );
+    if (resources.length > 0 || !searchQuery.trim()) {
+      acc[folderName] = { ...folderData, resources };
+    }
+
+    return acc;
+  }, {});
 };
 
 const AddFileModal = ({
@@ -139,8 +144,19 @@ const FilterModal = ({
   setSelectedSortOrder,
   selectedFileTypes,
   setSelectedFileTypes,
+  selectedDateRange,
   setSelectedDateRange,
   availableFileTypes,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedSortOrder: string;
+  setSelectedSortOrder: (value: string) => void;
+  selectedFileTypes: string[];
+  setSelectedFileTypes: (value: string[]) => void;
+  selectedDateRange: { from: string; to: string };
+  setSelectedDateRange: (value: { from: string; to: string }) => void;
+  availableFileTypes: string[];
 }) => {
   if (!isOpen) return null;
 
@@ -218,20 +234,20 @@ const FilterModal = ({
               type='date'
               className='w-full rounded-md bg-gray-700 px-2 py-1'
               onChange={(e) =>
-                setSelectedDateRange((prev) => ({
-                  ...prev,
+                setSelectedDateRange({
+                  ...selectedDateRange,
                   from: e.target.value,
-                }))
+                })
               }
             />
             <input
               type='date'
               className='w-full rounded-md bg-gray-700 px-2 py-1'
               onChange={(e) =>
-                setSelectedDateRange((prev) => ({
-                  ...prev,
+                setSelectedDateRange({
+                  ...selectedDateRange,
                   to: e.target.value,
-                }))
+                })
               }
             />
           </div>
@@ -292,18 +308,10 @@ export default function FileList() {
   ];
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (currentDocument) {
-        setLoading(true);
-        await fetchDocument(currentDocument.id);
-        setLoading(false);
-      } else {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+    if (currentDocument?.id) {
+      setLoading(false);
+    }
+  }, [currentDocument?.id]);
 
   const filteredFolders = useMemo(
     () =>
@@ -325,7 +333,7 @@ export default function FileList() {
 
   const handleAddFolder = async (folderName: string) => {
     if (!folderName.trim() || !currentDocument?.id) {
-      console.error('Folder name and document ID are required.');
+      error('Folder name and document ID are required');
       return;
     }
     setLoading(true);
@@ -340,16 +348,17 @@ export default function FileList() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        console.error('Error adding folder:', error.message);
-        alert(error.message || 'Failed to add folder.');
+        const errorData = await response.json();
+        error('Error adding folder', new Error(errorData.message));
+        alert(errorData.message || 'Failed to add folder.');
         return;
       }
 
       await fetchDocument(currentDocument.id);
       setIsAddFileModalOpen(false);
-    } catch (error) {
-      console.error('Error adding folder:', error);
+      debug('Folder added successfully', { folderName });
+    } catch (e: unknown) {
+      error('Error adding folder', e);
       alert('An error occurred while adding the folder.');
     } finally {
       setLoading(false);
@@ -387,7 +396,7 @@ export default function FileList() {
           {Object.entries(filteredFolders).map(([key, folder]) => (
             <TableFolder
               key={key}
-              folderData={folder}
+              folderData={{ name: key, resources: folder.resources }}
               isExpanded={!!expandedFolders[key]}
               onToggle={() =>
                 setExpandedFolders((prev) => ({

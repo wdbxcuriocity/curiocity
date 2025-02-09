@@ -1,16 +1,13 @@
-import dotenv from 'dotenv';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { v4 as uuidv4 } from 'uuid';
-import AWS from 'aws-sdk';
-import { putObject, getObject } from '../../route';
-
+import { getObject, putObject } from '../../route';
+import { debug, error } from '@/lib/logging';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { Document, ResourceMeta, ResourceCompressed } from '@/types/types';
-
-dotenv.config();
+import { v4 as uuidv4 } from 'uuid';
 
 const client = new DynamoDBClient({ region: 'us-west-1' });
-export const documentTable = process.env.DOCUMENT_TABLE || '';
-export const resourceMetaTable = process.env.RESOURCEMETA_TABLE || '';
+const resourceMetaTable = process.env.RESOURCEMETA_TABLE || '';
+const documentTable = process.env.DOCUMENT_TABLE || '';
 
 function inferFileType(nameOrUrl: string): string {
   const lower = nameOrUrl.toLowerCase();
@@ -30,8 +27,14 @@ function inferFileType(nameOrUrl: string): string {
 }
 
 export async function POST(request: Request) {
+  let data;
   try {
-    const data = await request.json();
+    data = await request.json();
+    debug('Resource metadata upload started', {
+      documentId: data.documentId,
+      name: data.name,
+    });
+
     const requiredFields = [
       'documentId',
       'name',
@@ -42,7 +45,10 @@ export async function POST(request: Request) {
     ];
     for (const field of requiredFields) {
       if (!data[field]) {
-        console.error(`Missing field: ${field}`);
+        error('Missing required field', null, {
+          field,
+          documentId: data.documentId,
+        });
         return new Response(
           JSON.stringify({ err: `Missing field: ${field}` }),
           { status: 400 },
@@ -76,16 +82,19 @@ export async function POST(request: Request) {
 
     const document = await getObject(client, data.documentId, documentTable);
     if (!document.Item) {
+      error('Document not found', null, { documentId: data.documentId });
       return new Response(JSON.stringify({ err: 'Document not found' }), {
         status: 404,
       });
     }
 
-    const newDocument = AWS.DynamoDB.Converter.unmarshall(
-      document.Item,
-    ) as Document;
+    const newDocument = unmarshall(document.Item) as Document;
 
     if (!newDocument.folders[data.folderName]) {
+      debug('Creating new folder', {
+        folderName: data.folderName,
+        documentId: data.documentId,
+      });
       newDocument.folders[data.folderName] = {
         name: data.folderName,
         resources: [],
@@ -94,15 +103,23 @@ export async function POST(request: Request) {
 
     newDocument.folders[data.folderName].resources.push(resourceMetaCompressed);
 
-    const inputResourceMetaData =
-      AWS.DynamoDB.Converter.marshall(resourceMetaItem);
-    const inputDocumentData = AWS.DynamoDB.Converter.marshall(newDocument);
+    const inputResourceMetaData = marshall(resourceMetaItem);
+    const inputDocumentData = marshall(newDocument);
 
     await putObject(client, inputResourceMetaData, resourceMetaTable);
     await putObject(client, inputDocumentData, documentTable);
+
+    debug('Resource metadata uploaded successfully', {
+      documentId: data.documentId,
+      resourceId: resourceMetaId,
+      folderName: data.folderName,
+    });
+
     return new Response(JSON.stringify(newDocument), { status: 200 });
-  } catch (error) {
-    console.error('Error in POST request:', error);
+  } catch (e: unknown) {
+    error('Error uploading resource metadata', e, {
+      documentId: data?.documentId,
+    });
     return new Response(JSON.stringify({ err: 'Internal server error' }), {
       status: 500,
     });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
-import AWS from 'aws-sdk';
+import { log, debug, error } from '@/lib/logging';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 
 const client = new DynamoDBClient({ region: 'us-west-1' });
 const tableName = process.env.DOCUMENT_TABLE || '';
@@ -34,8 +35,7 @@ const getUserDocumentsOrderedByLastOpened = async (ownerID: string) => {
     const data = await client.send(command);
 
     // Unmarshall the data
-    const items =
-      data.Items?.map((item) => AWS.DynamoDB.Converter.unmarshall(item)) || [];
+    const items = data.Items?.map((item) => unmarshall(item)) || [];
 
     // Sort items by lastOpened in descending order (most recent to least recent)
     const sortedItems = items.sort((a, b) => {
@@ -45,16 +45,28 @@ const getUserDocumentsOrderedByLastOpened = async (ownerID: string) => {
     });
 
     return sortedItems;
-  } catch (error) {
-    console.error('Error retrieving user documents:', error);
+  } catch (e: unknown) {
+    error('Error retrieving user documents', e);
     throw new Error('Could not retrieve user documents');
   }
 };
 
 // GET request handler with user-specific filtering and ordering by lastOpened
 export async function GET(request: NextRequest) {
+  const correlationId = crypto.randomUUID();
   const url = new URL(request.url);
-  const ownerID = url.searchParams.get('ownerID');
+  const searchParams = url.searchParams;
+  const ownerID = searchParams.get('ownerID');
+
+  log({
+    level: 'INFO',
+    service: 'document-api',
+    message: 'Fetching all documents',
+    correlationId,
+    metadata: {
+      ownerID,
+    },
+  });
 
   if (!ownerID) {
     return new Response('Owner ID is required', { status: 400 });
@@ -62,9 +74,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const items = await getUserDocumentsOrderedByLastOpened(ownerID);
+    debug('Documents fetched successfully', { count: items.length });
     return NextResponse.json(items);
-  } catch (error) {
-    console.error('Error retrieving documents:', error);
+  } catch (e: unknown) {
+    error('Error retrieving documents', e);
     return NextResponse.json(
       { error: 'Could not retrieve user documents' },
       { status: 500 },

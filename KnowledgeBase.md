@@ -1,5 +1,23 @@
 # Knowledge Base
 
+## DynamoDB Operations
+
+- AWS SDK v3 marshalling is preferred over v2 for better type safety
+- Avoid double marshalling by ensuring data is marshalled exactly once
+- Key patterns:
+  1. Use marshall() for input data before putObject
+  2. Use unmarshall() for output data after getObject
+  3. Never marshall already marshalled data
+- Common pitfalls:
+  1. Double marshalling causing ValidationException
+  2. Inconsistent ID handling between string and map types
+  3. Forgetting to marshall keys in query operations
+- Best practices:
+  1. Always marshall at the API route level
+  2. Use consistent patterns across all operations
+  3. Handle ValidationException errors gracefully
+  4. Include proper error context in logs
+
 ## Cloudflare D1
 
 - Access through request context in Edge functions
@@ -65,3 +83,67 @@
 - Feature flags enable gradual migration of functionality
 - Test scripts should validate both success and failure paths
 - Clean up is critical for maintaining test data isolation
+
+## Logging Patterns
+
+- All logs now use JSON format for machine parsing
+- Correlation IDs flow through client/server boundaries
+- Sensitive fields are redacted using pattern matching
+- Errors include sanitized stack traces
+- Page views track authenticated user context
+
+### Authentication
+
+- Tracks sign-in attempts and session creation
+- Logs provider and session duration
+- Redacts sensitive tokens
+
+### Resource Management
+
+- Tracks uploads, metadata updates, and access
+- Includes resource IDs and operation types
+- Measures operation durations
+
+### Document Operations
+
+- Logs folder renames and document updates
+- Tracks before/after states
+- Includes document context
+
+### Resource Uploads
+
+- Tracks file sizes and document context
+- Measures upload durations
+- Redacts file contents
+
+### Analytics
+
+- Logs event types and properties
+- Tracks PostHog integration
+- Redacts sensitive event data
+
+### User Management
+
+- Tracks profile updates
+- Logs changed fields
+- Redacts PII
+
+### Resource Notes
+
+- Tracks note fetch and update operations
+- Logs note lengths
+- Redacts note content
+
+### Resource Content
+
+- Tracks resource fetch operations
+- Logs content hashes
+- Measures fetch durations
+
+## Logging System
+
+- The application uses a centralized logging system in `lib/logging.ts`
+- Logger instances can be created per service with `new Logger(serviceName)`
+- Convenience methods available through `defaultLogger`
+- All logs include timestamps, correlation IDs, and proper redaction of sensitive data
+- Direct console.log usage is discouraged and will trigger ESLint warnings

@@ -1,6 +1,7 @@
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
-import AWS from 'aws-sdk';
 import { NextResponse } from 'next/server';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { debug, error } from '@/lib/logging';
 
 // Initialize DynamoDB client
 const client = new DynamoDBClient({ region: 'us-west-1' });
@@ -33,12 +34,10 @@ const getUserDocuments = async (ownerID: string) => {
     const command = new ScanCommand(params);
     const data = await client.send(command);
 
-    const items =
-      data.Items?.map((item: any) => AWS.DynamoDB.Converter.unmarshall(item)) ||
-      [];
+    const items = data.Items?.map((item: any) => unmarshall(item)) || [];
     return items;
-  } catch (error) {
-    console.error('Error retrieving user documents:', error);
+  } catch (e: unknown) {
+    error('Error retrieving user documents', e);
     throw new Error('Could not retrieve user documents');
   }
 };
@@ -53,10 +52,12 @@ export async function GET(request: Request) {
   }
 
   try {
+    debug('Fetching all documents', { ownerID });
     const items = await getUserDocuments(ownerID);
+    debug('Documents fetched successfully', { count: items.length });
     return NextResponse.json(items);
-  } catch (error) {
-    console.error('Error retrieving documents:', error);
+  } catch (e: unknown) {
+    error('Error retrieving documents', e);
     return NextResponse.error();
   }
 }

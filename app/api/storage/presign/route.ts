@@ -1,105 +1,119 @@
-import AWS from 'aws-sdk';
-import { getR2PresignedUrl } from '../cloudflare';
+import { getPresignedUrl } from '../cloudflare';
+import { NextResponse } from 'next/server';
+import { log } from '@/lib/logging';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-const s3 = new AWS.S3();
-const bucketName = process.env.S3_UPLOAD_BUCKET || '';
+const s3Client = new S3Client({
+  region: process.env.S3_REGION,
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY || '',
+    secretAccessKey: process.env.S3_SECRET_KEY || '',
+  },
+});
 
 /**
  * Generates a presigned URL for S3 operations
  */
-async function getS3PresignedUrl(
+export async function getS3PresignedUrl(
   key: string,
   operation: 'getObject' | 'putObject',
   expiresIn: number = 3600,
 ): Promise<string> {
-  const params = {
-    Bucket: bucketName,
-    Key: key,
-    Expires: expiresIn,
-  };
+  const command =
+    operation === 'getObject'
+      ? new GetObjectCommand({ Bucket: process.env.S3_UPLOAD_BUCKET, Key: key })
+      : new PutObjectCommand({
+          Bucket: process.env.S3_UPLOAD_BUCKET,
+          Key: key,
+        });
 
-  return s3.getSignedUrlPromise(operation, params);
+  return getSignedUrl(s3Client, command, { expiresIn });
 }
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
+  const correlationId = crypto.randomUUID();
   try {
-    const data = await request.json();
-    const { key, operation } = data;
-    const ctx = (request as any).context;
-    const expiresIn = data.expiresIn || 3600; // Default 1 hour
+    const { searchParams } = new URL(request.url);
+    const key = searchParams.get('key');
+    const operation = searchParams.get('operation') as 'read' | 'write';
+
+    log({
+      level: 'INFO',
+      service: 'storage',
+      message: 'Generating presigned URL',
+      metadata: { key, operation },
+    });
 
     if (!key || !operation) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
+      log({
+        level: 'WARN',
+        service: 'storage',
+        message: 'Missing required parameters',
+        metadata: { key, operation },
+      });
+      return NextResponse.json(
+        { error: 'Missing required parameters' },
         { status: 400 },
       );
     }
 
-    if (operation !== 'get' && operation !== 'put') {
-      return new Response(JSON.stringify({ error: 'Invalid operation' }), {
-        status: 400,
+    // Get R2 bucket instance
+    const bucket = (request as any).r2;
+    if (!bucket) {
+      log({
+        level: 'ERROR',
+        service: 'storage',
+        message: 'R2 bucket not initialized',
+        metadata: { key, operation },
       });
-    }
-
-    // Track success of presigned URL generation
-    let s3Success = true;
-    let r2Success = true;
-    let url = '';
-
-    // Get S3 presigned URL
-    try {
-      url = await getS3PresignedUrl(
-        key,
-        operation === 'get' ? 'getObject' : 'putObject',
-        expiresIn,
-      );
-    } catch (error) {
-      console.error('Failed to generate S3 presigned URL:', error);
-      s3Success = false;
-    }
-
-    // Get R2 presigned URL if enabled
-    if (process.env.ENABLE_CLOUDFLARE_STORAGE === 'true' && ctx?.env?.BUCKET) {
-      try {
-        const r2Result = await getR2PresignedUrl(
-          ctx.env.BUCKET,
-          key,
-          operation,
-          expiresIn,
-        );
-        if (!r2Result.success) {
-          console.error('Failed to generate R2 presigned URL:', r2Result.error);
-          r2Success = false;
-        } else if (!url && r2Result.url) {
-          // If S3 failed but R2 succeeded, use R2 URL
-          url = r2Result.url;
-        }
-      } catch (error) {
-        console.error('Failed to generate R2 presigned URL:', error);
-        r2Success = false;
-      }
-    }
-
-    // If both generations failed, return error
-    if (!s3Success && !r2Success) {
-      return new Response(
-        JSON.stringify({ error: 'Failed to generate presigned URL' }),
+      return NextResponse.json(
+        { error: 'Storage not configured' },
         { status: 500 },
       );
     }
 
-    return new Response(
-      JSON.stringify({
-        url,
-        s3Success,
-        r2Success,
-      }),
-      { status: 200 },
+    // Generate presigned URL
+    const url = await getPresignedUrl(
+      bucket,
+      key,
+      operation === 'read' ? 'get' : 'put',
     );
-  } catch (error) {
-    console.error('Error in presign request:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
+    if (!url) {
+      log({
+        level: 'ERROR',
+        service: 'storage',
+        message: 'Failed to generate R2 presigned URL',
+        metadata: { key, operation },
+      });
+      return NextResponse.json(
+        { error: 'Failed to generate presigned URL' },
+        { status: 500 },
+      );
+    }
+
+    log({
+      level: 'INFO',
+      service: 'storage',
+      message: 'Successfully generated presigned URL',
+      metadata: { key, operation },
     });
+    return NextResponse.json({ url });
+  } catch (error) {
+    log({
+      level: 'ERROR',
+      service: 'presign',
+      message: 'Failed to generate presigned URL',
+      correlationId,
+      error,
+    });
+    return NextResponse.json(
+      { error: 'Failed to generate presigned URL' },
+      { status: 500 },
+    );
   }
 }

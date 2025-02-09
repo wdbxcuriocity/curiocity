@@ -7,6 +7,7 @@ import { Document, ResourceMeta } from '@/types/types';
 import TagSection from '@/components/DocumentComponents/TagSection';
 import Divider from '../GeneralComponents/Divider';
 import { FaSpinner } from 'react-icons/fa';
+import { debug, error } from '@/lib/logging';
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
@@ -48,11 +49,12 @@ const FullTextEditor: React.FC<TextEditorProps> = ({
     setTitle(document.name || '');
     setContent(document.text || '');
     setID(document.id || '');
+    debug('Editor content loaded', { documentId: document.id });
   }, [source]);
 
   const handleSave = async () => {
     if (!source) {
-      console.error('No source provided for saving.');
+      error('No source provided for saving');
       return;
     }
 
@@ -71,9 +73,10 @@ const FullTextEditor: React.FC<TextEditorProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedDocument),
       });
+      debug('Editor content saved', { documentId: document.id });
       setIsUploading(false);
-    } catch (error) {
-      console.error('Error saving content:', error);
+    } catch (e) {
+      error('Error saving editor content', e);
       alert('Failed to save content.');
     }
   };
@@ -186,7 +189,7 @@ const MiniTextEditor: React.FC<TextEditorProps> = ({ source }) => {
 
   const handleSave = async () => {
     if (!source) {
-      console.error('No source provided for saving.');
+      error('No source provided for saving');
       return;
     }
 
@@ -195,13 +198,19 @@ const MiniTextEditor: React.FC<TextEditorProps> = ({ source }) => {
     try {
       const resourceMeta = source as ResourceMeta;
 
-      await fetch(`/api/db/ResourceMetaNotes`, {
+      await fetch(`/api/db/resourcemeta/notes`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: resourceMeta.id, notes: content }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: resourceMeta.id,
+          notes: content,
+        }),
       });
-    } catch (error) {
-      console.error('Error saving notes:', error);
+      debug('Notes saved successfully', { resourceId: resourceMeta.id });
+    } catch (e: unknown) {
+      error('Error saving notes', e);
       alert('Failed to save notes.');
     } finally {
       setIsUploading(false);

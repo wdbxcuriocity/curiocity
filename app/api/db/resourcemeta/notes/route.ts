@@ -1,44 +1,75 @@
 import dotenv from 'dotenv';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import AWS from 'aws-sdk';
-import { ResourceMeta, putObject, getObject } from '../../route';
+import { getObject, putObject } from '../../route';
+import { debug, error } from '@/lib/logging';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import { ResourceMeta } from '@/types/types';
+import { log, redact } from '@/lib/logging';
 
 dotenv.config();
 
 const client = new DynamoDBClient({ region: 'us-west-1' });
-export const resourceMetaTable = process.env.RESOURCEMETA_TABLE || '';
+const resourceMetaTable = process.env.RESOURCEMETA_TABLE || '';
 
 // **GET API: Fetch notes for a given resourceMeta ID**
 export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  const correlationId = crypto.randomUUID();
+  const { searchParams } = new URL(request.url);
+  const resourceId = searchParams.get('id');
 
-    if (!id) {
-      return new Response(JSON.stringify({ err: 'Missing resourceMeta ID' }), {
+  try {
+    if (!resourceId) {
+      log({
+        level: 'ERROR',
+        service: 'resourcemeta-notes',
+        message: 'Missing resourceId parameter',
+        correlationId,
+        metadata: redact({
+          resourceId,
+        }),
+      });
+      return new Response(JSON.stringify({ err: 'Missing resourceId' }), {
         status: 400,
       });
     }
 
-    // Retrieve the resourceMeta by ID
-    const resourceMeta = await getObject(client, id, resourceMetaTable);
+    debug('Fetching resource notes', { resourceId, correlationId });
+    const resourceMeta = await getObject(client, resourceId, resourceMetaTable);
 
     if (!resourceMeta.Item) {
+      error('ResourceMeta not found', null, { resourceId, correlationId });
       return new Response(JSON.stringify({ err: 'ResourceMeta not found' }), {
         status: 404,
       });
     }
 
-    const resourceMetaData = AWS.DynamoDB.Converter.unmarshall(
-      resourceMeta.Item,
-    ) as ResourceMeta;
+    const resourceMetaData = unmarshall(resourceMeta.Item) as ResourceMeta;
+    log({
+      level: 'INFO',
+      service: 'resourcemeta-notes',
+      message: 'Successfully fetched resource notes',
+      correlationId,
+      metadata: redact({
+        resourceId,
+        noteLength: resourceMetaData.notes?.length || 0,
+      }),
+    });
 
     return new Response(
       JSON.stringify({ notes: resourceMetaData.notes || '' }),
       { status: 200 },
     );
-  } catch (error) {
-    console.error('Error in GET Notes API:', error);
+  } catch (e: unknown) {
+    log({
+      level: 'ERROR',
+      service: 'resourcemeta-notes',
+      message: 'Failed to fetch resource notes',
+      correlationId,
+      error: e,
+      metadata: redact({
+        resourceId,
+      }),
+    });
     return new Response(JSON.stringify({ err: 'Internal server error' }), {
       status: 500,
     });
@@ -47,11 +78,32 @@ export async function GET(request: Request) {
 
 // **PUT API: Update notes for a given resourceMeta ID**
 export async function PUT(request: Request) {
+  const correlationId = crypto.randomUUID();
+  let resourceId: string | undefined;
+
   try {
     const data = await request.json();
-    const { id, notes } = data;
+    resourceId = data.id;
 
-    if (!id || typeof notes !== 'string') {
+    log({
+      level: 'INFO',
+      service: 'resourcemeta-notes',
+      message: 'Notes update initiated',
+      correlationId,
+      metadata: redact({
+        resourceId,
+        operation: 'UPDATE',
+      }),
+    });
+
+    const { notes } = data;
+    debug('PUT request received', { resourceId });
+
+    if (!data.id || typeof notes !== 'string') {
+      error('Missing or invalid parameters', null, {
+        resourceId,
+        hasNotes: !!notes,
+      });
       return new Response(
         JSON.stringify({ err: 'Missing or invalid parameters' }),
         { status: 400 },
@@ -59,17 +111,16 @@ export async function PUT(request: Request) {
     }
 
     // Retrieve the existing resourceMeta
-    const resourceMeta = await getObject(client, id, resourceMetaTable);
+    const resourceMeta = await getObject(client, data.id, resourceMetaTable);
 
     if (!resourceMeta.Item) {
+      error('ResourceMeta not found', null, { resourceId });
       return new Response(JSON.stringify({ err: 'ResourceMeta not found' }), {
         status: 404,
       });
     }
 
-    const existingResourceMeta = AWS.DynamoDB.Converter.unmarshall(
-      resourceMeta.Item,
-    ) as ResourceMeta;
+    const existingResourceMeta = unmarshall(resourceMeta.Item) as ResourceMeta;
 
     // Update the notes
     const updatedResourceMeta = {
@@ -78,60 +129,71 @@ export async function PUT(request: Request) {
       updatedAt: new Date().toISOString(),
     };
 
-    const input = AWS.DynamoDB.Converter.marshall(updatedResourceMeta);
+    const input = marshall(updatedResourceMeta);
     await putObject(client, input, resourceMetaTable);
+    debug('Notes updated successfully', { resourceId });
 
     return new Response(JSON.stringify({ msg: 'Notes updated successfully' }), {
       status: 200,
     });
-  } catch (error) {
-    console.error('Error in PUT Notes API:', error);
+  } catch (e: unknown) {
+    log({
+      level: 'ERROR',
+      service: 'resourcemeta-notes',
+      message: 'Failed to update notes',
+      correlationId,
+      error: e,
+      metadata: redact({
+        resourceId,
+      }),
+    });
     return new Response(JSON.stringify({ err: 'Internal server error' }), {
       status: 500,
     });
   }
 }
 
-// **DELETE API: Clear notes for a given resourceMeta ID**
+// **DELETE API: Delete notes for a given resourceMeta ID**
 export async function DELETE(request: Request) {
-  try {
-    const data = await request.json();
-    const { id } = data;
+  const correlationId = crypto.randomUUID();
+  const { searchParams } = new URL(request.url);
+  const resourceId = searchParams.get('id');
 
-    if (!id) {
+  try {
+    debug('Deleting resource notes', { resourceId });
+    if (!resourceId) {
+      error('Missing resourceMeta ID');
       return new Response(JSON.stringify({ err: 'Missing resourceMeta ID' }), {
         status: 400,
       });
     }
 
-    // Retrieve the existing resourceMeta
-    const resourceMeta = await getObject(client, id, resourceMetaTable);
+    const resourceMeta = await getObject(client, resourceId, resourceMetaTable);
 
     if (!resourceMeta.Item) {
+      error('ResourceMeta not found', null, { resourceId });
       return new Response(JSON.stringify({ err: 'ResourceMeta not found' }), {
         status: 404,
       });
     }
 
-    const existingResourceMeta = AWS.DynamoDB.Converter.unmarshall(
-      resourceMeta.Item,
-    ) as ResourceMeta;
+    const resourceMetaData = unmarshall(resourceMeta.Item) as ResourceMeta;
+    resourceMetaData.notes = '';
 
-    // Clear the notes
-    const updatedResourceMeta = {
-      ...existingResourceMeta,
-      notes: '',
-      updatedAt: new Date().toISOString(),
-    };
+    await putObject(client, resourceMetaData, resourceMetaTable);
+    debug('Notes deleted successfully', { resourceId });
 
-    const input = AWS.DynamoDB.Converter.marshall(updatedResourceMeta);
-    await putObject(client, input, resourceMetaTable);
-
-    return new Response(JSON.stringify({ msg: 'Notes cleared successfully' }), {
-      status: 200,
+    return new Response(
+      JSON.stringify({ message: 'Notes deleted successfully' }),
+      {
+        status: 200,
+      },
+    );
+  } catch (e: unknown) {
+    error('Error deleting resource notes', e, {
+      resourceId,
+      correlationId,
     });
-  } catch (error) {
-    console.error('Error in DELETE Notes API:', error);
     return new Response(JSON.stringify({ err: 'Internal server error' }), {
       status: 500,
     });

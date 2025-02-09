@@ -5,21 +5,36 @@
 - **Next.js**
 - **TypeScript**
 - **AWS**: DynamoDB + S3
+- **Cloudflare**: D1 + R2 + KV (optional)
+- **PostHog**: Analytics
+- **NextAuth**: Authentication
 
 ## Key Features
 
-- Document Uploading
-- Resource Organization
-- Resource Uploading
-- Resource Parsing
-- Authentication
+- Document Management
+  - Document creation and organization
+  - Folder management
+  - Document metadata tracking
+- Resource Management
+  - Resource uploading and parsing
+  - Resource metadata management
+  - Resource content storage (S3/R2)
+- Authentication & Authorization
+  - OAuth support
+  - Session management (DynamoDB/KV)
+  - Account linking
+- Observability
+  - Structured logging
+  - Request correlation
+  - Analytics tracking
+  - Error monitoring
 
 ## Running the Development Server
 
 ```bash
 git clone https://github.com/wdbxcuriocity/curiocity.git
-npm install
-npm run dev
+yarn install
+yarn dev
 ```
 
 ## Pushing to Production
@@ -55,7 +70,8 @@ App
 │   │   ├── documents
 │   │   ├── resource
 │   │   ├── resourcemeta
-│   │   ├── (others, need to be reorganized)
+│   │   ├── cloudflare.ts (D1/KV operations)
+│   │   └── route.ts (DynamoDB operations)
 │   ├── resource_parsing
 │   ├── manual-signup
 │   ├── reset-password
@@ -73,6 +89,9 @@ App
 │   ├── AppContext (Resources and Documents)
 │   ├── AuthContext
 │   └── SwitchContext
+├── Lib
+│   ├── logging.ts (Structured logging)
+│   └── validation.ts (Input validation)
 ```
 
 ## Environment Variables

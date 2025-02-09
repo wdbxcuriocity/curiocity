@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 
 import { useCurrentDocument, useCurrentResource } from '@/context/AppContext';
+import { error } from '@/lib/logging';
 
 import FileViewer from '@/components/ResourceComponents/FilesViewer';
 import NavBar from '@/components/GeneralComponents/NavBar';
@@ -32,13 +33,16 @@ export default function ReportHome() {
   const { setCurrentResource, setCurrentResourceMeta } = useCurrentResource();
 
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedDocuments, setHasLoadedDocuments] = useState(false);
 
   useEffect(() => {
-    if (session?.user?.id) fetchDocuments();
-  }, [session]);
+    if (session?.user?.id && !hasLoadedDocuments) {
+      fetchDocuments();
+      setHasLoadedDocuments(true);
+    }
+  }, [session?.user?.id, fetchDocuments, hasLoadedDocuments]);
 
   const handleBack = () => {
-    fetchDocuments();
     setViewingDocument(false);
     setCurrentDocument(null);
     setCurrentResourceMeta(null);
@@ -50,8 +54,8 @@ export default function ReportHome() {
     try {
       await fetchDocument(documentId);
       setViewingDocument(true);
-    } catch (error) {
-      console.error('Error fetching document:', error);
+    } catch (e: unknown) {
+      error('Error fetching document', e, { documentId });
     } finally {
       setIsLoading(false);
     }

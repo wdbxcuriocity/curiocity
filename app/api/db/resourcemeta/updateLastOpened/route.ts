@@ -3,7 +3,9 @@ import {
   UpdateItemCommand,
   GetItemCommand,
 } from '@aws-sdk/client-dynamodb';
-import AWS from 'aws-sdk';
+import { unmarshall, marshall } from '@aws-sdk/util-dynamodb';
+import { ResourceCompressed } from '@/types/types'; // Correct type name
+import { debug, error } from '@/lib/logging';
 
 const client = new DynamoDBClient({ region: 'us-west-1' });
 const resourceMetaTable = process.env.RESOURCEMETA_TABLE || '';
@@ -12,112 +14,97 @@ const documentTable = process.env.DOCUMENT_TABLE || '';
 export async function POST(request: Request) {
   try {
     const { resourceMetaId, folderName } = await request.json();
-
-    if (!resourceMetaId) {
-      return new Response(
-        JSON.stringify({ error: 'resourceMetaId is required' }),
-        { status: 400 },
-      );
-    }
-
     const currentTimestamp = new Date().toISOString();
 
-    const updateResourceParams = {
-      TableName: resourceMetaTable,
-      Key: AWS.DynamoDB.Converter.marshall({ id: resourceMetaId }),
-      UpdateExpression: 'SET lastOpened = :lastOpened',
-      ExpressionAttributeValues: {
-        ':lastOpened': AWS.DynamoDB.Converter.input(currentTimestamp),
-      },
-      ReturnValues: 'UPDATED_NEW',
-    };
+    debug('Updating last opened timestamp', { resourceMetaId, folderName });
 
-    const updateResourceCommand = new UpdateItemCommand(updateResourceParams);
-    await client.send(updateResourceCommand);
+    // Start both operations in parallel
+    const [, getResourceMeta] = await Promise.all([
+      client.send(
+        new UpdateItemCommand({
+          TableName: resourceMetaTable,
+          Key: { id: { S: resourceMetaId } },
+          UpdateExpression: 'SET lastOpened = :lastOpened',
+          ExpressionAttributeValues: { ':lastOpened': { S: currentTimestamp } },
+        }),
+      ),
+      client.send(
+        new GetItemCommand({
+          TableName: resourceMetaTable,
+          Key: { id: { S: resourceMetaId } },
+          ProjectionExpression: 'documentId',
+        }),
+      ),
+    ]);
 
-    const getResourceMetaParams = {
-      TableName: resourceMetaTable,
-      Key: AWS.DynamoDB.Converter.marshall({ id: resourceMetaId }),
-    };
-
-    const getResourceMetaCommand = new GetItemCommand(getResourceMetaParams);
-    const resourceMetaData = await client.send(getResourceMetaCommand);
-
-    if (!resourceMetaData.Item) {
-      console.error('ResourceMeta not found for ID:', resourceMetaId);
+    if (!getResourceMeta.Item) {
+      error('ResourceMeta not found', null, { resourceMetaId });
       return new Response(JSON.stringify({ error: 'ResourceMeta not found' }), {
         status: 404,
       });
     }
 
-    const resourceMeta = AWS.DynamoDB.Converter.unmarshall(
-      resourceMetaData.Item,
-    );
+    const resourceMeta = unmarshall(getResourceMeta.Item);
     const { documentId } = resourceMeta;
 
-    // Fetch the document to locate the resource within the folder
-    const getDocumentParams = {
+    // Get document and update folder in one operation
+    const getDocumentCommand = new GetItemCommand({
       TableName: documentTable,
-      Key: AWS.DynamoDB.Converter.marshall({ id: documentId }),
-    };
+      Key: { id: { S: documentId } },
+      ProjectionExpression: 'id, folders',
+    });
 
-    const getDocumentCommand = new GetItemCommand(getDocumentParams);
     const documentData = await client.send(getDocumentCommand);
-
     if (!documentData.Item) {
-      console.error('Document not found for ID:', documentId);
+      error('Document not found', null, { documentId, resourceMetaId });
       return new Response(JSON.stringify({ error: 'Document not found' }), {
         status: 404,
       });
     }
 
-    const document = AWS.DynamoDB.Converter.unmarshall(documentData.Item);
-
-    // Update the specific resource in the folder
-    let resourceUpdated = false;
-    if (document.folders[folderName]) {
-      document.folders[folderName].resources = document.folders[
-        folderName
-      ].resources.map((resource: any) => {
-        if (resource.id === resourceMetaId) {
-          resource.lastOpened = currentTimestamp;
-          resourceUpdated = true;
-        }
-        return resource;
+    const folders = unmarshall(documentData.Item).folders;
+    if (!folders[folderName]) {
+      error('Folder not found', null, {
+        folderName,
+        documentId,
+        resourceMetaId,
       });
-    } else {
-      console.error('Folder not found:', folderName);
       return new Response(
         JSON.stringify({ error: `Folder "${folderName}" not found` }),
         { status: 404 },
       );
     }
 
-    if (!resourceUpdated) {
-      console.error(
-        'Resource not found in folder:',
-        resourceMetaId,
-        folderName,
-      );
-      return new Response(
-        JSON.stringify({ error: 'Resource not found in folder' }),
-        { status: 404 },
-      );
-    }
-
-    // Update the Document table with the modified folders
-    const updateDocumentParams = {
-      TableName: documentTable,
-      Key: AWS.DynamoDB.Converter.marshall({ id: documentId }),
-      UpdateExpression: 'SET folders = :folders',
-      ExpressionAttributeValues: {
-        ':folders': AWS.DynamoDB.Converter.input(document.folders),
+    // Update specific resource in folder
+    const updatedFolders = {
+      ...folders,
+      [folderName]: {
+        ...folders[folderName],
+        resources: folders[folderName].resources.map(
+          (resource: ResourceCompressed) =>
+            resource.id === resourceMetaId
+              ? { ...resource, lastOpened: currentTimestamp }
+              : resource,
+        ),
       },
-      ReturnValues: 'UPDATED_NEW',
     };
 
-    const updateDocumentCommand = new UpdateItemCommand(updateDocumentParams);
-    await client.send(updateDocumentCommand);
+    await client.send(
+      new UpdateItemCommand({
+        TableName: documentTable,
+        Key: { id: { S: documentId } },
+        UpdateExpression: 'SET folders = :folders',
+        ExpressionAttributeValues: {
+          ':folders': { M: marshall(updatedFolders) },
+        },
+      }),
+    );
+
+    debug('Successfully updated last opened timestamp', {
+      resourceMetaId,
+      documentId,
+      folderName,
+    });
 
     return new Response(
       JSON.stringify({
@@ -125,8 +112,8 @@ export async function POST(request: Request) {
       }),
       { status: 200 },
     );
-  } catch (error) {
-    console.error('Error updating lastOpened:', error);
+  } catch (e: unknown) {
+    error('Error updating lastOpened', e);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
     });

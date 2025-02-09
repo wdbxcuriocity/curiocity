@@ -1,56 +1,62 @@
-import { NextResponse } from 'next/server';
-import AWS from 'aws-sdk';
+import dotenv from 'dotenv';
+import {
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+} from '@aws-sdk/client-dynamodb';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import { log, redact } from '@/lib/logging';
 import { PostHog } from 'posthog-node';
-import { getCurrentTime } from '../../user/route';
+
+dotenv.config();
+
+const client = new DynamoDBClient({ region: 'us-west-1' });
+const documentTable = process.env.DOCUMENT_TABLE || '';
 
 // Initialize the PostHog client
 const posthog = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY || '', {
-  host: process.env.NEXT_PUBLIC_POSTHOG_HOST, // Ensure this points to your PostHog host
+  host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
 });
 
-const dynamoDB = new AWS.DynamoDB({
-  region: 'us-west-1', // Replace with your region
-});
-
-const documentTable = process.env.DOCUMENT_TABLE || '';
+const getCurrentTime = () => {
+  const now = new Date();
+  return now.toISOString();
+};
 
 export async function PUT(request: Request) {
+  const correlationId = crypto.randomUUID();
+  let data;
   try {
-    const body = await request.json();
+    data = await request.json();
 
-    if (!body.tag || !body.documentId) {
-      return NextResponse.json(
+    if (!data.tag || !data.documentId) {
+      return Response.json(
         { error: 'Tag and documentId are required.' },
         { status: 400 },
       );
     }
 
-    const { tag, documentId } = body;
+    const { tag, documentId } = data;
 
     // Fetch the document by ID
-    const getParams = {
+    const getCommand = new GetItemCommand({
       TableName: documentTable,
-      Key: {
-        id: { S: documentId },
-      },
-    };
+      Key: marshall({ id: documentId }),
+    });
 
-    const document = await dynamoDB.getItem(getParams).promise();
+    const document = await client.send(getCommand);
 
     if (!document.Item) {
-      return NextResponse.json(
-        { error: 'Document not found.' },
-        { status: 404 },
-      );
+      return Response.json({ error: 'Document not found.' }, { status: 404 });
     }
 
     // Unmarshall the DynamoDB response
-    const unmarshalledDoc = AWS.DynamoDB.Converter.unmarshall(document.Item);
+    const unmarshalledDoc = unmarshall(document.Item);
 
     // Check for duplicates
     unmarshalledDoc.tags = unmarshalledDoc.tags || [];
     if (unmarshalledDoc.tags.includes(tag)) {
-      return NextResponse.json(
+      return Response.json(
         { error: 'Duplicate tag not allowed.' },
         { status: 409 },
       );
@@ -60,29 +66,35 @@ export async function PUT(request: Request) {
     unmarshalledDoc.tags.push(tag);
 
     // Update the document with the new tag
-    const updateParams = {
+    const putCommand = new PutItemCommand({
       TableName: documentTable,
-      Item: AWS.DynamoDB.Converter.marshall(unmarshalledDoc),
-    };
+      Item: marshall(unmarshalledDoc),
+    });
 
-    await dynamoDB.putItem(updateParams).promise();
+    await client.send(putCommand);
 
     posthog.capture({
-      distinctId: unmarshalledDoc.ownerID, // Unique identifier for the obj
-      event: 'Tags Updated', // Event name
+      distinctId: unmarshalledDoc.ownerID,
+      event: 'Tags Updated',
       properties: {
         id: documentId,
         timeStamp: getCurrentTime(),
       },
     });
 
-    return NextResponse.json({ message: 'Tag added successfully.' });
+    return Response.json({ message: 'Tag added successfully.' });
   } catch (error) {
-    console.error('Error adding tag:', error);
-
-    return NextResponse.json(
-      { error: 'Failed to add tag to document.' },
-      { status: 500 },
-    );
+    log({
+      level: 'ERROR',
+      service: 'document-tags',
+      message: 'Failed to add tag',
+      correlationId,
+      error,
+      metadata: redact({
+        documentId: data?.documentId,
+        tag: data?.tag,
+      }),
+    });
+    return Response.json({ error: 'Internal server error.' }, { status: 500 });
   }
 }

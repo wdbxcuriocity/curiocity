@@ -3,7 +3,8 @@ import {
   GetItemCommand,
   UpdateItemCommand,
 } from '@aws-sdk/client-dynamodb';
-import AWS from 'aws-sdk';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import { debug, error } from '@/lib/logging';
 
 const client = new DynamoDBClient({ region: 'us-west-1' });
 const documentTable = process.env.DOCUMENT_TABLE || '';
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const document = AWS.DynamoDB.Converter.unmarshall(documentData.Item);
+    const document = unmarshall(documentData.Item);
 
     // Check if the old folder exists
     if (!document.folders || !document.folders[oldFolderName]) {
@@ -71,12 +72,18 @@ export async function POST(request: Request) {
       },
       UpdateExpression: 'SET folders = :folders',
       ExpressionAttributeValues: {
-        ':folders': { M: AWS.DynamoDB.Converter.marshall(updatedFolders) },
+        ':folders': { M: marshall(updatedFolders) },
       },
     };
 
     const updateCommand = new UpdateItemCommand(updateParams);
     await client.send(updateCommand);
+
+    debug('Folder renamed successfully', {
+      documentId,
+      oldFolderName,
+      newFolderName,
+    });
 
     return new Response(
       JSON.stringify({
@@ -85,8 +92,8 @@ export async function POST(request: Request) {
       }),
       { status: 200 },
     );
-  } catch (error) {
-    console.error('Error renaming folder:', error);
+  } catch (e: unknown) {
+    error('Error renaming folder', e);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
     });

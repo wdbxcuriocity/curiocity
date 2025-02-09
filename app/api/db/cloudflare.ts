@@ -1,5 +1,11 @@
 import { D1Database } from '@cloudflare/workers-types';
-import { validateData } from './validation';
+import { log, redact } from '@/lib/logging';
+import { z } from 'zod';
+
+interface ValidationResult {
+  success: boolean;
+  error?: unknown;
+}
 
 // Types from DynamoDB operations
 export type Resource = {
@@ -42,11 +48,22 @@ export type Folder = {
 
 // Core D1 Database operations that mirror our DynamoDB operations
 export const putD1Object = async (db: D1Database, data: any, table: string) => {
+  const correlationId = crypto.randomUUID();
   try {
     // Validate data before writing
-    const validation = validateData(data, table);
-    if (!validation.valid) {
-      console.error(`Validation failed for ${table}:`, validation.error);
+    const validation = validateData(table, data);
+    if (!validation.success) {
+      log({
+        level: 'ERROR',
+        service: 'database',
+        message: `Validation failed for ${table}`,
+        correlationId,
+        error: validation.error,
+        metadata: redact({
+          table,
+          data,
+        }),
+      });
       return { success: false, error: validation.error };
     }
 
@@ -68,9 +85,20 @@ export const putD1Object = async (db: D1Database, data: any, table: string) => {
       .prepare(query)
       .bind(...values)
       .run();
+
     return { success: true };
   } catch (error: any) {
-    console.error('Failed to put item in D1:', error);
+    log({
+      level: 'ERROR',
+      service: 'database',
+      message: 'Failed to put item in D1',
+      correlationId,
+      error,
+      metadata: redact({
+        table,
+        id: data?.id,
+      }),
+    });
     return { success: false, error };
   }
 };
@@ -80,6 +108,7 @@ export const getD1Object = async (
   id: string,
   table: string,
 ) => {
+  const correlationId = crypto.randomUUID();
   try {
     const query = `SELECT * FROM ${table} WHERE id = ?`;
     const result = await db.prepare(query).bind(id).first();
@@ -90,19 +119,36 @@ export const getD1Object = async (
       if (result.tags) result.tags = JSON.parse(result.tags as string);
 
       // Validate data after parsing
-      const validation = validateData(result, table);
-      if (!validation.valid) {
-        console.error(
-          `Retrieved invalid data from ${table}:`,
-          validation.error,
-        );
+      const validation = validateData(table, result);
+      if (!validation.success) {
+        log({
+          level: 'ERROR',
+          service: 'database',
+          message: 'Retrieved invalid data from D1',
+          correlationId,
+          error: validation.error,
+          metadata: redact({
+            table,
+            id,
+          }),
+        });
         return null;
       }
     }
 
     return result;
   } catch (error: any) {
-    console.error('Error getting object from D1:', error);
+    log({
+      level: 'ERROR',
+      service: 'database',
+      message: 'Failed to get item from D1',
+      correlationId,
+      error,
+      metadata: redact({
+        table,
+        id,
+      }),
+    });
     return null;
   }
 };
@@ -112,12 +158,23 @@ export const deleteD1Object = async (
   id: string,
   table: string,
 ) => {
+  const correlationId = crypto.randomUUID();
   try {
     const query = `DELETE FROM ${table} WHERE id = ?`;
     await db.prepare(query).bind(id).run();
     return { success: true };
   } catch (error: any) {
-    console.error('Error deleting object from D1:', error);
+    log({
+      level: 'ERROR',
+      service: 'database',
+      message: 'Failed to delete item from D1',
+      correlationId,
+      error,
+      metadata: redact({
+        table,
+        id,
+      }),
+    });
     return { success: false, error };
   }
 };
@@ -145,3 +202,29 @@ export const convertFromSQLData = (data: any): any => {
   }
   return data;
 };
+
+function validateData(table: string, data: any): ValidationResult {
+  // Define schemas for different tables
+  const schemas: { [key: string]: z.ZodSchema } = {
+    documents: z.object({
+      id: z.string(),
+      // Add other required fields
+    }),
+    resourcemeta: z.object({
+      id: z.string(),
+      // Add other required fields
+    }),
+  };
+
+  const schema = schemas[table];
+  if (!schema) {
+    return { success: true }; // Skip validation if no schema defined
+  }
+
+  try {
+    schema.parse(data);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error };
+  }
+}
